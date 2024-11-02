@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive"
+BUCKET_NAME = 'clima-smart-data-collection'
 
 default_args = {
     'owner': 'airflow',
@@ -30,7 +31,7 @@ def get_daily_weather_data():
     response = fetch_daily_weather_data(client, API_URL, params)
     daily_data = process_daily_weather_data(response)
     save_data_to_csv(daily_data, 'daily_weather_data.csv')
-    upload_to_gcs('clima-smart-data-collection', 'daily_weather_data.csv', 'weather_data/daily_weather_data.csv')
+    upload_to_gcs(BUCKET_NAME, 'daily_weather_data.csv', 'weather_data/daily_weather_data.csv')
     logging.info("Daily weather data task completed.")
     
 def get_hourly_weather_data():
@@ -40,14 +41,13 @@ def get_hourly_weather_data():
     response = fetch_hourly_weather_data(client, API_URL, params)
     hourly_data = process_hourly_weather_data(response)
     save_data_to_csv(hourly_data, 'hourly_weather_data.csv')
-    upload_to_gcs('clima-smart-data-collection', 'hourly_weather_data.csv', 'weather_data/hourly_weather_data.csv')
+    upload_to_gcs(BUCKET_NAME, 'hourly_weather_data.csv', 'weather_data/hourly_weather_data.csv')
     logging.info("Hourly weather data task completed.")
     
 def visualize_and_upload():
     logging.info("Starting the visualization weather data task.")
-    bucket_name = 'clima-smart-data-collection'
-    generate_plots(bucket_name, 'weather_data/daily_weather_data.csv', 'weather_data/hourly_weather_data.csv', 'weather_data_plots')
-    generate_seasonal_trend_plots(bucket_name, 'weather_data/daily_weather_data.csv', 'weather_data_plots')
+    generate_plots(BUCKET_NAME, 'weather_data/daily_weather_data.csv', 'weather_data/hourly_weather_data.csv', 'weather_data_plots')
+    generate_seasonal_trend_plots(BUCKET_NAME, 'weather_data/daily_weather_data.csv', 'weather_data_plots')
     logging.info("Visualization task completed including uploading plots.")
     
 daily_weather_task = PythonOperator(
