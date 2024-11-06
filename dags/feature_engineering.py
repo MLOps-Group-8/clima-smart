@@ -2,62 +2,27 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from google.cloud import storage
-import io
 import logging
+from utils import save_plot_to_gcs
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
-
-def load_data_from_gcs(bucket_name, file_name):
-    """Load CSV data from Google Cloud Storage into a DataFrame."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-    data = blob.download_as_string()
-    df = pd.read_csv(io.BytesIO(data))
-    logging.info(f"Loaded {file_name} from GCS.")
-    return df
-
-def save_data_to_gcs(df, bucket_name, file_name):
-    """Save DataFrame as a CSV file in Google Cloud Storage."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-    output = io.BytesIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    blob.upload_from_file(output, content_type='text/csv')
-    logging.info(f"Saved {file_name} to GCS.")
-
-def save_plot_to_gcs(bucket_name, plot_name):
-    """Save the current matplotlib plot to Google Cloud Storage in a specific folder."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(f"weather_data_plots/{plot_name}.png")
-    plot_image = io.BytesIO()
-    plt.savefig(plot_image, format='png')
-    plot_image.seek(0)
-    blob.upload_from_file(plot_image, content_type='image/png')
-    logging.info(f"Plot {plot_name} saved to GCS in folder weather_data_plots.")
-
-def eda_and_visualizations(hourly_data, daily_data):
+def eda_and_visualizations(bucket_name, hourly_data, daily_data):
     logging.info("Starting EDA and visualizations.")
     
     # Correlation heatmap for hourly data (numeric columns only)
     plt.figure(figsize=(20, 16))
     sns.heatmap(hourly_data.select_dtypes(include=[np.number]).corr(), annot=False, cmap='coolwarm')
     plt.title('Correlation Heatmap - Hourly Data')
-    save_plot_to_gcs(BUCKET_NAME, 'correlation_heatmap_hourly')
+    save_plot_to_gcs(bucket_name, 'correlation_heatmap_hourly')
     plt.clf()
 
     # Correlation heatmap for daily data (numeric columns only)
     plt.figure(figsize=(20, 16))
     sns.heatmap(daily_data.select_dtypes(include=[np.number]).corr(), annot=False, cmap='coolwarm')
     plt.title('Correlation Heatmap - Daily Data')
-    save_plot_to_gcs(BUCKET_NAME, 'correlation_heatmap_daily')
+    save_plot_to_gcs(bucket_name, 'correlation_heatmap_daily')
     plt.clf()
 
     # Time series plot of temperature and precipitation (hourly data)
@@ -68,21 +33,21 @@ def eda_and_visualizations(hourly_data, daily_data):
     plt.xlabel('Date')
     plt.ylabel('Value')
     plt.legend()
-    save_plot_to_gcs(BUCKET_NAME, 'time_series_temp_precip')
+    save_plot_to_gcs(bucket_name, 'time_series_temp_precip')
     plt.clf()
 
     # Distribution of temperature (daily data)
     plt.figure(figsize=(12, 6))
     sns.histplot(data=daily_data, x='temperature_2m_max', kde=True)
     plt.title('Distribution of Daily Maximum Temperature')
-    save_plot_to_gcs(BUCKET_NAME, 'distribution_daily_max_temp')
+    save_plot_to_gcs(bucket_name, 'distribution_daily_max_temp')
     plt.clf()
 
     # Box plot of precipitation by season (daily data)
     plt.figure(figsize=(12, 6))
     sns.boxplot(data=daily_data, x='season', y='precipitation_sum')
     plt.title('Precipitation by Season')
-    save_plot_to_gcs(BUCKET_NAME, 'boxplot_precip_by_season')
+    save_plot_to_gcs(bucket_name, 'boxplot_precip_by_season')
     plt.clf()
     
     logging.info("EDA and visualizations completed.")
@@ -158,22 +123,16 @@ def engineer_daily_features(df):
 
     return df
 
-def feature_engineering():
+def feature_engineering(hourly_data, daily_data):  
     logging.info("Starting feature engineering task.")
-    
-    # Load preprocessed data from GCS
-    hourly_data = load_data_from_gcs(BUCKET_NAME, 'weather_data/preprocessed_hourly_data.csv')
-    daily_data = load_data_from_gcs(BUCKET_NAME, 'weather_data/preprocessed_daily_data.csv')
-    
+      
     # Apply feature engineering transformations
     hourly_data = engineer_hourly_features(hourly_data)
     daily_data = engineer_daily_features(daily_data)
-    
-    # Save the engineered data back to GCS
-    save_data_to_gcs(hourly_data, BUCKET_NAME, 'weather_data/engineered_hourly_data.csv')
-    save_data_to_gcs(daily_data, BUCKET_NAME, 'weather_data/engineered_daily_data.csv')
-    
+
     # Perform EDA and visualizations, saving each plot to GCS
     eda_and_visualizations(hourly_data, daily_data)
+
+    return hourly_data, daily_data
     
     logging.info("Feature engineering and EDA task completed.")
