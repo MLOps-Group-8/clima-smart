@@ -76,7 +76,7 @@ The pipeline consists of six core steps, each handled by a separate Directed Acy
 ---
 
 ### DAG Workflow and Status
-[DAG Workflow](reports/figures/DAG_working.jpeg)
+![DAG Workflow](reports/figures/DAG_working.jpeg)
 
 | DAG                              | Purpose                                      | Status               |
 |----------------------------------|----------------------------------------------|----------------------|
