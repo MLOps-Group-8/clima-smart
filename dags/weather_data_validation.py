@@ -1,50 +1,7 @@
-import pandas as pd
-from google.cloud import storage
-import io
 import logging
-import pickle
-
-# Constants for Google Cloud Storage and file paths
-BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
-DAILY_DATA_PATH = 'weather_data/engineered_daily_data.csv'
-HOURLY_DATA_PATH = 'weather_data/engineered_hourly_data.csv'
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def load_data_from_gcs(bucket_name, file_path):
-    """Load CSV data directly from GCS into a DataFrame."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_path)
-    data = blob.download_as_string()
-    return pd.read_csv(io.BytesIO(data))
-
-def save_object_to_gcs(bucket_name, object_data, destination_path):
-    """Save a Python object to GCS as a pickle file."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_path)
-    try:
-        with io.BytesIO() as f:
-            pickle.dump(object_data, f)
-            f.seek(0)
-            blob.upload_from_file(f, content_type='application/octet-stream')
-        logging.info(f"Object saved to GCS at {destination_path}")
-    except Exception as e:
-        logging.error(f"Failed to save object to GCS at {destination_path}: {e}")
-
-def load_object_from_gcs(bucket_name, source_path):
-    """Load a Python object from a pickle file in GCS."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(source_path)
-    try:
-        with io.BytesIO(blob.download_as_string()) as f:
-            return pickle.load(f)
-    except Exception as e:
-        logging.error(f"Failed to load object from GCS at {source_path}: {e}")
-        return None
 
 # Custom test functions
 
@@ -87,12 +44,10 @@ def test_schema_similarity(schema1, schema2):
     else:
         logging.info("Schemas for daily and hourly data match.")
 
-def validate_weather_data():
+def validate_weather_data(daily_data, hourly_data):
     """Run custom data validation checks on daily and hourly data."""
     # Load the engineered data from GCS
     logging.info("Loading engineered daily and hourly data from GCS.")
-    daily_data = load_data_from_gcs(BUCKET_NAME, DAILY_DATA_PATH)
-    hourly_data = load_data_from_gcs(BUCKET_NAME, HOURLY_DATA_PATH)
 
     # Run validation checks on daily data
     logging.info("Running validation checks on daily data.")
@@ -108,19 +63,9 @@ def validate_weather_data():
 
     logging.info("Data validation completed.")
 
-def save_schema_and_stats(daily_schema, hourly_schema, daily_stats, hourly_stats):
-    """Save schemas and statistics to GCS for future reference."""
-    save_object_to_gcs(BUCKET_NAME, daily_schema, 'weather_data_validation/daily_schema.pkl')
-    save_object_to_gcs(BUCKET_NAME, hourly_schema, 'weather_data_validation/hourly_schema.pkl')
-    save_object_to_gcs(BUCKET_NAME, daily_stats, 'weather_data_validation/daily_stats.pkl')
-    save_object_to_gcs(BUCKET_NAME, hourly_stats, 'weather_data_validation/hourly_stats.pkl')
-
-def test_data_quality_and_schema():
+def test_data_quality_and_schema(daily_schema, hourly_schema):
     """Test data quality and schema similarity by loading schemas from GCS and running tests."""
-    # Load schemas from GCS
-    daily_schema = load_object_from_gcs(BUCKET_NAME, 'weather_data_validation/daily_schema.pkl')
-    hourly_schema = load_object_from_gcs(BUCKET_NAME, 'weather_data_validation/hourly_schema.pkl')
-    
+   
     # Log types for debugging
     logging.info(f"Type of daily_schema: {type(daily_schema)}")
     logging.info(f"Type of hourly_schema: {type(hourly_schema)}")
