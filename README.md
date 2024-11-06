@@ -1,6 +1,5 @@
 # ClimaSmart
 
-
 ClimaSmart is a next-generation AI-powered weather prediction system designed to provide highly accurate, real-time weather forecasts alongside personalized recommendations. The system offers features such as Weather-Based Commute Suggestions, Outdoor Adventure Recommendations, and an interactive chatbot for real-time queries about weather conditions.
 
 ## Workflow
@@ -58,106 +57,134 @@ ClimaSmart is a next-generation AI-powered weather prediction system designed to
     └── plots.py           <- Code to create visualizations
 ```
 
-# Weather Data Collection DAG
+---
 
-This document describes the Airflow DAG `weather_data_collection_dag.py`, which automates the process of collecting, processing, and storing weather data. The DAG ensures data is fetched regularly and reliably, leveraging Apache Airflow's scheduling and monitoring capabilities.
+# Data Pipeline for Weather Collection, Processing, and Analysis
 
-## Overview
+This section provides details on the ClimaSmart Data Pipeline, which uses Apache Airflow for orchestration within Google Cloud Platform (GCP). The pipeline automates weather data collection, processing, feature engineering, and quality validation to support ClimaSmart’s AI-powered weather prediction.
 
-The DAG defined in this module handles the orchestration of tasks related to:
-- Fetching raw weather data from external APIs. [https://open-meteo.com/en/docs/historical-weather-api]
-- Processing the raw data into a structured format.
-- Optionally, uploading processed data to a cloud storage solution or a database.
+## Platform Overview
 
-## Dependencies
+- **Platform**: Google Cloud Platform (GCP)
+- **Orchestration**: Apache Airflow via Cloud Composer
+- **Pipeline Objective**: Automated weather data collection, processing, and quality validation for data-driven insights.
 
-This DAG relies on the following Python modules and Airflow operators:
+## Pipeline Architecture
 
-- `pandas`: For data manipulation.
-- `requests` or `http_lib`: Depending on the method of HTTP requests to APIs.
-- Airflow operators such as `PythonOperator`, `BashOperator`, etc.
+The pipeline consists of six core steps, each handled by a separate Directed Acyclic Graph (DAG) in Airflow. Each DAG automates specific tasks to streamline weather data processing from initial collection to final validation.
 
-Make sure to install the necessary packages:
+---
 
-```bash
-pip install apache-airflow pandas requests
-```
+### DAG Workflow and Status
+![DAG Workflow](reports/figures/DAG_working.jpeg)
 
-# Weather Data Collection Module
 
-This module, `weather_data_collection.py`, is part of a larger project aimed at collecting, processing, and visualizing weather data. The script automates the retrieval of weather data from various APIs and processes it for further analysis and visualization.
+| DAG                              | Purpose                                      | Status               |
+|----------------------------------|----------------------------------------------|----------------------|
+| Fetch and Save Daily Weather     | Retrieves daily data                         | Successfully Running |
+| Fetch and Save Hourly Weather    | Retrieves hourly data                        | Successfully Running |
+| Preprocess Data                  | Handles missing values, transformations      | Successfully Running |
+| Feature Engineering & Visualization | Creates new features and visuals      | Successfully Running |
+| Schema Statistics                | Generates schema metadata                    | Successfully Running |
+| Data Validation                  | Ensures schema and data quality              | Successfully Running |
 
-## Overview
+---
 
-The module performs the following key functions:
+### Detailed Workflow of Each Step
 
-- **API Data Fetching**: Connects to weather data sources and fetches data based on specified parameters.
-- **Data Processing**: Cleans and transforms raw data into a usable format for analysis.
-- **Data Storage**: Stores the processed data in a structured format, ready for analysis or visualization.
+#### 1. Fetch and Save Daily Weather Data
+- **Objective**: Retrieve daily weather data from external APIs and store it in Google Cloud Storage (GCS).
+- **Process**:
+  - **Data Collection**: Uses APIs like Open-Meteo’s Historical Weather API with the `requests` library.
+  - **Data Processing**: Structures data with **pandas**, applying time zone standardization and formatting.
+  - **Storage**: Saves as CSV in GCS.
+- **DAG Status**: Successfully running, scheduled to run daily.
 
-## Dependencies
+#### 2. Fetch and Save Hourly Weather Data
+- **Objective**: Capture hourly weather data for granular analysis.
+- **Process**:
+  - **Data Collection**: Fetches hourly data via API calls with `requests`.
+  - **Data Processing**: Formats data with **pandas**, aggregating and aligning time zones.
+  - **Storage**: Saves in CSV format in GCS.
+- **DAG Status**: Successfully running, scheduled to run hourly.
 
-This module requires the following Python libraries:
+#### 3. Preprocess Daily and Hourly Data
+- **Objective**: Ensure data quality through preprocessing.
+- **Process**:
+  - **Handling Missing Values**: Uses **pandas** and **numpy** for filling or dropping null values.
+  - **Data Transformation**: Standardizes temperature units and dates.
+  - **Outlier Detection**: Identifies and handles outliers using **scikit-learn**.
+- **DAG Status**: Successfully running, ensuring consistent data for downstream tasks.
 
-- `pandas`: For data manipulation and analysis.
-- `requests`: For making HTTP requests to weather APIs.
-- `matplotlib`: (Optional) For generating any initial exploratory plots.
+#### 4. Feature Engineering and Visualization
+- **Objective**: Enrich data and create visualizations for analysis.
+- **Process**:
+  - **Feature Engineering**: Generates rolling averages, temperature differentials using **pandas**.
+  - **Visualization**: Generates time series plots, heatmaps, histograms using **matplotlib** and **seaborn**.
+- **DAG Status**: Successfully running, generating feature-rich datasets and visuals.
 
-Ensure these dependencies are installed using:
+#### 5. Generate and Save Schema Statistics
+- **Objective**: Provide summary metadata for validation.
+- **Process**:
+  - **Schema Generation**: Computes min, max, and mean for each feature.
+  - **Storage**: Saves statistics in GCS for reference.
+- **DAG Status**: Successfully running, schema statistics available for validation.
 
-```bash
-pip install pandas requests matplotlib
-```
+#### 6. Validate Weather Data and Test Data Quality and Schema
+- **Objective**: Validate data quality and schema adherence.
+- **Process**:
+  - **Schema Validation**: Ensures data conforms to expected column names and types.
+  - **Quality Testing**: Tests for duplicates, null values, and schema compliance using **pandas**.
+- **DAG Status**: Successfully running, validating data quality.
 
-# Weather Data Preprocessing Module
+---
 
-This module, `weather_data_preprocessing.py`, focuses on cleaning, transforming, and preparing weather data for further analysis or visualization. It is designed to ensure data quality and usability by addressing common issues such as missing values, incorrect formats, and data inconsistencies.
+### Technology Stack and Dependencies
 
-## Overview
+- **Orchestration**: Apache Airflow within Cloud Composer.
+- **Storage**: Google Cloud Storage (GCS) for data files and schema metadata.
+- **Python Libraries**:
+  - **pandas** and **numpy** for data handling.
+  - **requests** for API interactions.
+  - **matplotlib** and **seaborn** for visualization.
+  - **scikit-learn** for outlier detection and normalization.
 
-The preprocessing module is crucial for:
-- Ensuring data accuracy and consistency.
-- Transforming raw data into a format suitable for analysis.
-- Enhancing data quality through cleaning operations.
+### Orchestration and Scheduling with Apache Airflow
+Airflow DAGs manage each stage, enabling robust monitoring and modularity. Each task is triggered on a schedule:
+- **Daily Pipeline**: Runs each morning for daily data.
+- **Hourly Pipeline**: Runs hourly to capture real-time data.
 
-## Dependencies
+---
 
-This script depends on several Python libraries:
+## DVC Integration for Data Tracking and Version Control
 
-- `pandas`: For efficient data manipulation and analysis.
-- `numpy`: For numerical operations.
-- Additional libraries might include `scikit-learn` for scaling and normalization if used.
+Integrating **Data Version Control (DVC)** with ClimaSmart’s pipeline helps manage and track data versions. Key tracked files include raw data, processed data, feature-engineered datasets, and visualizations.
 
-Ensure these are installed using:
+### DVC Setup
+1. **Initialize DVC**:
+   ```bash
+   dvc init
+   ```
+2. **Add Remote Storage**:
+   ```bash
+   dvc remote add -d myremote gs://your-gcs-bucket/dvc-storage
+   ```
+3. **Track Data Files**:
+   ```bash
+   dvc add data/raw/daily_weather.csv
+   dvc add data/raw/hourly_weather.csv
+   dvc add data/processed/preprocessed_daily.csv
+   dvc add data/processed/preprocessed_hourly.csv
+   dvc add data/featured/engineered_data.csv
+   ```
 
-```bash
-pip install pandas numpy scikit-learn
-```
+### DVC Benefits
+Using DVC enhances reproducibility and traceability of data changes across the pipeline stages, with remote storage providing scalable data access.
 
-# Weather Data Visualization Module
+---
 
-This module, `weather_data_visualization.py`, is designed to create visual representations of weather data to aid in analysis and reporting. It focuses on generating various types of plots that highlight trends, patterns, and anomalies in the weather data collected and processed by other components of the project.
+## Conclusion
 
-## Overview
+The ClimaSmart Data Pipeline offers a robust solution for automated weather data processing. Each Airflow DAG is independently managed, ensuring modularity, scalability, and reliability for data-driven applications.
 
-The visualization module serves to:
-- Provide insights through visual means which are easily digestible.
-- Support exploratory data analysis with graphical representations.
-- Enable stakeholders to make informed decisions based on visual trends.
-
-## Dependencies
-
-This script relies on several libraries, prominently:
-
-- `matplotlib`: For creating static, animated, and interactive visualizations.
-- `seaborn`: For high-level interface for drawing attractive and informative statistical graphics.
-- `pandas`: For data manipulation necessary before visualization.
-
-Make sure these are installed using:
-
-```bash
-pip install matplotlib seaborn pandas
-```
-
---------
-
+For any further setup instructions or pipeline expansion, refer to [Detailed Pipeline Documentation](reports/Data_Pipeline_Group8.pdf).
