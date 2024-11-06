@@ -77,7 +77,7 @@ The pipeline consists of six core steps, each handled by a separate Directed Acy
 
 ### DAG Workflow and Status
 ![DAG Workflow](reports/figures/DAG_working.jpeg)
-![Gantt Chart](reports/figures/Gannt_Data Pipeline.jpg)
+
 
 | DAG                              | Purpose                                      | Status               |
 |----------------------------------|----------------------------------------------|----------------------|
