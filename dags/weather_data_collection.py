@@ -2,9 +2,8 @@ import pandas as pd
 import requests_cache
 from retry_requests import retry
 import openmeteo_requests
-from google.cloud import storage
 import logging
-import traceback
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -157,17 +156,3 @@ def process_hourly_weather_data(response):
         "direct_radiation_instant": hourly.Variables(49).ValuesAsNumpy() if hourly.VariablesLength() > 49 else None
     })
     return hourly_data
-
-def save_data_to_csv(dataframe, filename):
-    dataframe.to_csv(filename, index=False)
-    logging.info(f"Data saved to {filename}")
-
-def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_name)
-        blob.upload_from_filename(source_file_name)
-        logging.info(f"File {source_file_name} uploaded to {destination_blob_name}.")
-    except Exception as e:
-        logging.error(f"Error uploading file to GCS: {e}")

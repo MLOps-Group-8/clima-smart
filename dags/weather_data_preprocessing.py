@@ -12,40 +12,8 @@ import io
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': datetime(2024, 1, 1),
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-}
-
-
-BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
-
-def load_data_from_gcs(bucket_name, file_name):
-    """Load CSV data from Google Cloud Storage into a DataFrame."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-    data = blob.download_as_string()
-    df = pd.read_csv(io.BytesIO(data))
-    logging.info(f"Loaded {file_name} from GCS.")
-    return df
-
-def save_data_to_gcs(df, bucket_name, file_name):
-    """Save DataFrame as a CSV file in Google Cloud Storage."""
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-    output = io.BytesIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    blob.upload_from_file(output, content_type='text/csv')
-    logging.info(f"Saved {file_name} to GCS.")
-
-def preprocess_daily_data():
-    df = load_data_from_gcs(BUCKET_NAME, 'weather_data/daily_weather_data.csv')
+def preprocess_daily_data(daily_weather_data):
+    df = daily_weather_data
 
     # Preprocessing steps for daily data
     df['date'] = pd.to_datetime(df['date'])
@@ -79,10 +47,10 @@ def preprocess_daily_data():
 
     df.reset_index(inplace=True)
 
-    save_data_to_gcs(df, BUCKET_NAME, 'weather_data/preprocessed_daily_data.csv')
+    return df
 
-def preprocess_hourly_data():
-    df = load_data_from_gcs(BUCKET_NAME, 'weather_data/hourly_weather_data.csv')
+def preprocess_hourly_data(hourly_weather_data):
+    df = hourly_weather_data
 
     # Preprocessing steps for hourly data
     df['date'] = pd.to_datetime(df['datetime'])
@@ -114,4 +82,4 @@ def preprocess_hourly_data():
     df['is_weekend'] = df['is_weekend'].astype('category')
     df['is_precipitation'] = df['is_precipitation'].astype('category')
 
-    save_data_to_gcs(df, BUCKET_NAME, 'weather_data/preprocessed_hourly_data.csv')
+    return df
