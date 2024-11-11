@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def read_csv_from_gcs(bucket_name, blob_name):
+def read_data_from_gcs(bucket_name, blob_name):
     """
     Reads a CSV file directly into a pandas DataFrame from Google Cloud Storage.
 

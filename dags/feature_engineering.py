@@ -1,56 +1,9 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import logging
-from utils import save_plot_to_gcs
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def eda_and_visualizations(bucket_name, hourly_data, daily_data):
-    logging.info("Starting EDA and visualizations.")
-    
-    # Correlation heatmap for hourly data (numeric columns only)
-    plt.figure(figsize=(20, 16))
-    sns.heatmap(hourly_data.select_dtypes(include=[np.number]).corr(), annot=False, cmap='coolwarm')
-    plt.title('Correlation Heatmap - Hourly Data')
-    save_plot_to_gcs(bucket_name, 'correlation_heatmap_hourly')
-    plt.clf()
-
-    # Correlation heatmap for daily data (numeric columns only)
-    plt.figure(figsize=(20, 16))
-    sns.heatmap(daily_data.select_dtypes(include=[np.number]).corr(), annot=False, cmap='coolwarm')
-    plt.title('Correlation Heatmap - Daily Data')
-    save_plot_to_gcs(bucket_name, 'correlation_heatmap_daily')
-    plt.clf()
-
-    # Time series plot of temperature and precipitation (hourly data)
-    plt.figure(figsize=(20, 10))
-    plt.plot(hourly_data['datetime'], hourly_data['temperature_2m'], label='Temperature')
-    plt.plot(hourly_data['datetime'], hourly_data['precipitation'], label='Precipitation')
-    plt.title('Temperature and Precipitation Over Time')
-    plt.xlabel('Date')
-    plt.ylabel('Value')
-    plt.legend()
-    save_plot_to_gcs(bucket_name, 'time_series_temp_precip')
-    plt.clf()
-
-    # Distribution of temperature (daily data)
-    plt.figure(figsize=(12, 6))
-    sns.histplot(data=daily_data, x='temperature_2m_max', kde=True)
-    plt.title('Distribution of Daily Maximum Temperature')
-    save_plot_to_gcs(bucket_name, 'distribution_daily_max_temp')
-    plt.clf()
-
-    # Box plot of precipitation by season (daily data)
-    plt.figure(figsize=(12, 6))
-    sns.boxplot(data=daily_data, x='season', y='precipitation_sum')
-    plt.title('Precipitation by Season')
-    save_plot_to_gcs(bucket_name, 'boxplot_precip_by_season')
-    plt.clf()
-    
-    logging.info("EDA and visualizations completed.")
 
 def engineer_hourly_features(df):
     df['datetime'] = pd.to_datetime(df['datetime'])
@@ -129,9 +82,6 @@ def feature_engineering(hourly_data, daily_data):
     # Apply feature engineering transformations
     hourly_data = engineer_hourly_features(hourly_data)
     daily_data = engineer_daily_features(daily_data)
-
-    # Perform EDA and visualizations, saving each plot to GCS
-    eda_and_visualizations(hourly_data, daily_data)
 
     return hourly_data, daily_data
     
