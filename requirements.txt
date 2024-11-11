@@ -1,10 +1,10 @@
-black
-flake8
-isort
-loguru
-mkdocs
-pip
-python-dotenv
-tqdm
-typer
--e .
+apache-airflow
+apache-airflow[gcp]
+pandas
+requests-cache
+google-cloud-storage
+openmeteo-requests 
+retry-requests
+matplotlib
+seaborn
+numpy
