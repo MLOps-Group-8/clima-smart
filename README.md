@@ -23,7 +23,8 @@ ClimaSmart is a next-generation AI-powered weather prediction system designed to
 ├── docs                   <- A default mkdocs project; see www.mkdocs.org for details
 │
 ├── dags                   <- Directory for Airflow DAGs and utility scripts
-│   ├── util.py            <- Utility functions used across different scripts
+│   ├── utils.py            <- Utility functions used across different scripts
+│   ├── constants.py            <- Constants used across different scripts
 │   ├── weather_data_collection.py           <- Script to collect weather data
 │   ├── weather_data_collection_dag.py       <- Airflow DAG for scheduling data collection
 │   ├── weather_data_preprocessing.py        <- Script for data preprocessing
