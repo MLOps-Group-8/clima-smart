@@ -134,6 +134,9 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 └── Dockerfile                  <- Docker image configuration
 ```
 
+## Workflow
+![WorkFlow Diagram](reports/figures/Worflow.png)
+
 ## Installation
 
 This project requires **Python 3.8 or higher**. Please ensure that the correct version of Python is installed on your device. This project is compatible with Windows, Linux, and macOS.
@@ -239,6 +242,8 @@ The pipeline consists of six core steps, each handled by a separate Directed Acy
 ---
 
 ### DAG Workflow and Status
+![DAG Workflow](reports/figures/DAG_working.jpeg)
+
 
 | DAG                              | Purpose                                      | Status               |
 |----------------------------------|----------------------------------------------|----------------------|
