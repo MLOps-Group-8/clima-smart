@@ -51,7 +51,7 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 
 ## Git Repository Structure
 
-
+.
 ├── assets                      <- Contains subfolders for weather data, data plots, and data validation assets
 │   ├── weather_data
 │   │   ├── weather_data_daily_weather_data.csv
