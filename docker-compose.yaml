@@ -17,10 +17,10 @@ x-airflow-common:
     AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
     AIRFLOW__SMTP__SMTP_STARTTLS: 'True'
     AIRFLOW__SMTP__SMTP_SSL: 'False'
-    AIRFLOW__SMTP__SMTP_USER: darshan.webjaguar@gmail.com           # Gmail address
-    AIRFLOW__SMTP__SMTP_PASSWORD: ywqa jwgs lzve vvsc         # App password generated from Google
+    AIRFLOW__SMTP__SMTP_USER: keshiarun01@gmail.com           # Gmail address
+    AIRFLOW__SMTP__SMTP_PASSWORD: rmuc fysi ipdw opzs         # App password generated from Google
     AIRFLOW__SMTP__SMTP_PORT: 587
-    AIRFLOW__SMTP__SMTP_MAIL_FROM: darshan.webjaguar@gmail.com      # Same Gmail address
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: keshiarun01@gmail.com    # Same Gmail address
     AIRFLOW__SMTP__SMTP_TIMEOUT: 30                         # SMTP timeout in seconds
     AIRFLOW__SMTP__SMTP_RETRY_LIMIT: 5                      # Maximum retries
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'

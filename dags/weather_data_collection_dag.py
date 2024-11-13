@@ -24,7 +24,7 @@ from constants import *
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive"
-BUCKET_NAME = 'clima-smart-data-collection'
+BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
 
 default_args = {
     'owner': 'airflow',
@@ -45,7 +45,7 @@ dag = DAG('weather_data_pipeline', default_args=default_args,
 def notify_success(context):
     success_email = EmailOperator(
         task_id='success_email',
-        to='darshan.webjaguar@gmail.com',
+        to='keshiarun01@gmail.com',
         subject='Success Notification from Airflow',
         html_content='<p>The task succeeded.</p>',
         dag=context['dag']
@@ -55,7 +55,7 @@ def notify_success(context):
 def notify_failure(context):
     failure_email = EmailOperator(
         task_id='failure_email',
-        to='darshan.webjaguar@gmail.com',
+        to='keshiarun01@gmail.com',
         subject='Failure Notification from Airflow',
         html_content='<p>The task failed.</p>',
         dag=context['dag']
@@ -244,7 +244,6 @@ eda_and_visualizations_task = PythonOperator(
     dag=dag
 )
 
-
 # Updated task for generating and saving schema and stats
 generate_and_save_schema_stats_task = PythonOperator(
     task_id='generate_and_save_schema_stats',
@@ -275,7 +274,7 @@ schema_quality_test_task = PythonOperator(
 
 email_notification_task = EmailOperator(
     task_id='send_email_notification',
-    to='darshan.webjaguar@gmail.com',
+    to='keshiarun01@gmail.com',
     subject='Dag Completed Successfully',
     html_content='<p>Dag Completed</p>',
     dag=dag,
@@ -283,3 +282,4 @@ email_notification_task = EmailOperator(
 
 # Set task dependencies
 daily_weather_task >> hourly_weather_task >> preprocess_daily_task >> preprocess_hourly_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task
+
