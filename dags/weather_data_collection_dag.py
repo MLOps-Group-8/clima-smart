@@ -24,8 +24,7 @@ default_args = {
 
 dag = DAG('weather_data_pipeline', default_args=default_args, schedule_interval=None)
 
-<<<<<<< Updated upstream
-=======
+
 # Define function to notify failure or sucess via an email
 def notify_success(context):
     success_email = EmailOperator(
@@ -49,7 +48,7 @@ def notify_failure(context):
 
 
 # Task to fetch and save daily weather data
->>>>>>> Stashed changes
+
 def get_daily_weather_data():
     logging.info("Starting the daily weather data task.")
     client = setup_session()
@@ -94,9 +93,7 @@ visualize_and_upload_task = PythonOperator(
     dag=dag
 )
 
-<<<<<<< Updated upstream
-daily_weather_task >> hourly_weather_task >> visualize_and_upload_task
-=======
+
 preprocess_hourly_task = PythonOperator(
     task_id='preprocess_hourly_data',
     python_callable=preprocess_hourly_weather_data,
@@ -157,4 +154,3 @@ email_notification_task = EmailOperator(
 
 # Set task dependencies
 daily_weather_task >> hourly_weather_task >> preprocess_daily_task >> preprocess_hourly_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task
->>>>>>> Stashed changes

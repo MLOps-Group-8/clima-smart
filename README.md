@@ -51,8 +51,7 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 
 ## Git Repository Structure
 
-```
-├── LICENSE                <- Open-source license if one is chosen
+
 ├── assets                      <- Contains subfolders for weather data, data plots, and data validation assets
 │   ├── weather_data
 │   │   ├── weather_data_daily_weather_data.csv
@@ -84,17 +83,8 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 │   │   └── train.py            <- Model training script
 │   └── plots.py                <- Script for data visualization
 │
-<<<<<<< Updated upstream
-├── dags                   <- Directory for Airflow DAGs and utility scripts
-│   ├── util.py            <- Utility functions used across different scripts
-│   ├── weather_data_collection.py           <- Script to collect weather data
-│   ├── weather_data_collection_dag.py       <- Airflow DAG for scheduling data collection
-│   ├── weather_data_preprocessing.py        <- Script for data preprocessing
-│   └── weather_data_visualization.py        <- Script for generating data visualizations
-=======
 ├── config                      <- Configuration files, including credentials
 │   └── key.json                <- JSON key file for authentication (e.g., Google Cloud)
->>>>>>> Stashed changes
 │
 ├── dags                        <- Directory for Airflow DAGs and utility scripts
 │   ├── constants.py            <- Defines constants used across DAGs
