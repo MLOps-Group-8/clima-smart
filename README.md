@@ -390,6 +390,5 @@ Using DVC enhances reproducibility and traceability of data changes across the p
 
 The ClimaSmart Data Pipeline offers a robust solution for automated weather data processing. Each Airflow DAG is independently managed, ensuring modularity, scalability, and reliability for data-driven applications. The addition of Docker-based orchestration and email notifications enhances flexibility and monitoring for local deployment.
 
-For any further setup instructions or pipeline expansion, refer to [Detailed Pipeline Documentation](reports/Data_Pipeline_Group8.pdf).
-
+For any further setup instructions or pipeline expansion, refer to [Detailed Pipeline Documentation](reports/Data_Pipeline_Group8.pdf)
 ---
