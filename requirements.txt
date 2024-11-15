@@ -8,3 +8,5 @@ retry-requests
 matplotlib
 seaborn
 numpy
+tensorflow
+scikit-learn

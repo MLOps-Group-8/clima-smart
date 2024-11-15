@@ -7,6 +7,8 @@ import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.utils.trigger_rule import TriggerRule
 from weather_data_collection import (
     setup_session,
     fetch_daily_weather_data,
@@ -24,7 +26,7 @@ from constants import *
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive"
-BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
+BUCKET_NAME = 'clima-smart-data-collection'
 
 default_args = {
     'owner': 'airflow',
@@ -280,6 +282,13 @@ email_notification_task = EmailOperator(
     dag=dag,
 )
 
+# Task to trigger the ModelPipeline DAG
+trigger_model_pipeline_task = TriggerDagRunOperator(
+    task_id='trigger_model_pipeline_task',
+    trigger_dag_id='ModelDevelopmentPipeline',
+    trigger_rule=TriggerRule.ALL_DONE,  # Ensure this task runs only if all upstream tasks succeed
+    dag=dag,
+)
 # Set task dependencies
-daily_weather_task >> hourly_weather_task >> preprocess_daily_task >> preprocess_hourly_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task
+daily_weather_task >> hourly_weather_task >> preprocess_daily_task >> preprocess_hourly_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task >> trigger_model_pipeline_task
 

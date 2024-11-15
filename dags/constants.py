@@ -1,5 +1,5 @@
 # Constants for Google Cloud Storage and file paths
-BUCKET_NAME = 'us-east1-climasmart-fefe9cc2-bucket'
+BUCKET_NAME = 'clima-smart-data-collection'
 ENGINEERED_DAILY_DATA_PATH = 'weather_data/engineered_daily_data.csv'
 ENGINEERED_HOURLY_DATA_PATH = 'weather_data/engineered_hourly_data.csv'
 DAILY_SCHEMA_PATH = 'weather_data_validation/daily_schema.pkl'
