@@ -76,13 +76,21 @@ def engineer_daily_features(df):
 
     return df
 
-def feature_engineering(hourly_data, daily_data):  
-    logging.info("Starting feature engineering task.")
+def daily_feature_engineering(daily_data):  
+    logging.info("Starting daily feature engineering task.")
+      
+    daily_data = engineer_daily_features(daily_data)
+
+    logging.info("Daily feature engineering task completed.")
+
+    return daily_data
+
+def hourly_feature_engineering(hourly_data):  
+    logging.info("Starting hourly feature engineering task.")
       
     # Apply feature engineering transformations
     hourly_data = engineer_hourly_features(hourly_data)
-    daily_data = engineer_daily_features(daily_data)
 
-    return hourly_data, daily_data
-    
-    logging.info("Feature engineering and EDA task completed.")
+    logging.info("Hourly feature engineering task completed.")
+
+    return hourly_data
