@@ -385,6 +385,7 @@ Integrating **Data Version Control (DVC)** with ClimaSmart’s pipeline helps ma
 Using DVC enhances reproducibility and traceability of data changes across the pipeline stages, with remote storage providing scalable data access.
 
 ---
+### Model Development
 
 ## Conclusion
 
