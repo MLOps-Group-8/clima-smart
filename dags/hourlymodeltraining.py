@@ -1,21 +1,20 @@
 import logging
-from google.cloud import storage
 import pandas as pd
 import numpy as np
-from io import BytesIO
+import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score
+import pickle
+from google.cloud import storage
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def load_data_from_gcs(bucket_name, file_path):
     """
-    Load engineered data from a GCS bucket.
+    Load engineered hourly data from a GCS bucket.
 
     Args:
         bucket_name (str): The name of the GCS bucket.
@@ -29,80 +28,96 @@ def load_data_from_gcs(bucket_name, file_path):
     bucket = client.get_bucket(bucket_name)
     blob = bucket.blob(file_path)
     data = blob.download_as_bytes()
-    df = pd.read_csv(BytesIO(data))
+    df = pd.read_csv(io.BytesIO(data))
     logging.info("Data successfully loaded from GCS")
     return df
 
-def process_data(data):
+def process_data(data, features, targets):
     """
-    Process the loaded data for model training.
+    Process the data for hourly model training.
 
     Args:
         data (pd.DataFrame): Raw data.
+        features (list): List of feature column names.
+        targets (list): List of target column names.
 
     Returns:
-        Tuple: Preprocessed training and test data (X_train, X_test, y_train, y_test).
+        dict: Processed data split for each target variable.
     """
     logging.info("Processing data for model training")
-    data_cleaned = data.dropna()
-    X = data_cleaned.drop(columns=[
-        "temperature_2m", "relative_humidity_2m", "dew_point_2m",
-        "precipitation", "rain", "snowfall", "wind_speed_10m",
-        "wind_direction_10m", "surface_pressure", "apparent_temperature"
-    ])
-    X = X.drop(columns=["temp_rolling_mean_24h"], errors='ignore')
-    X['datetime'] = pd.to_datetime(X['datetime'], errors='coerce')
-    X['year'] = X['datetime'].dt.year
-    X['month'] = X['datetime'].dt.month
-    X['day'] = X['datetime'].dt.day
-    X['hour'] = X['datetime'].dt.hour
-    X = X.drop(columns=["datetime"])
-    X = pd.get_dummies(X, columns=['wind_category'], drop_first=True)
-    y = data_cleaned["apparent_temperature"]
+    data.dropna(subset=features + targets, inplace=True)
 
-    scaler = MinMaxScaler()
-    X_scaled = scaler.fit_transform(X)
-    X_scaled = np.expand_dims(X_scaled, axis=1)
+    # Normalize the features
+    scaler_features = StandardScaler()
+    data[features] = scaler_features.fit_transform(data[features])
 
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+    processed_data = {}
+
+    for target in targets:
+        # Normalize the target variable
+        scaler_target = StandardScaler()
+        data[target] = scaler_target.fit_transform(data[[target]])
+
+        # Split the data into features (X) and target (y)
+        X = data[features].values
+        y = data[target].values
+
+        # Train/Validation/Test Split
+        X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42)
+        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
+        processed_data[target] = {
+            "X_train": X_train,
+            "X_val": X_val,
+            "X_test": X_test,
+            "y_train": y_train,
+            "y_val": y_val,
+            "y_test": y_test
+        }
+
     logging.info("Data processing completed")
-    return X_train, X_test, y_train, y_test
+    return processed_data
 
-def build_model(input_shape):
+def train_model(X_train, X_val, y_train, y_val, params=None):
     """
-    Build and compile the LSTM model.
+    Train an XGBoost model with early stopping.
 
     Args:
-        input_shape (tuple): Shape of the input data.
+        X_train, X_val: Feature matrices for training and validation.
+        y_train, y_val: Target vectors for training and validation.
+        params (dict): Hyperparameters for the XGBoost model.
 
     Returns:
-        model: Compiled LSTM model.
-    """
-    logging.info("Building LSTM model")
-    model = Sequential()
-    model.add(LSTM(units=64, return_sequences=True, input_shape=input_shape))
-    model.add(Dropout(0.2))
-    model.add(LSTM(units=32))
-    model.add(Dropout(0.2))
-    model.add(Dense(units=1))
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae', 'mse'])
-    logging.info("Model built and compiled successfully")
-    return model
-
-def train_model(X_train, X_test, y_train, y_test):
-    """
-    Train the LSTM model.
-
-    Args:
-        X_train, X_test, y_train, y_test: Preprocessed data.
-
-    Returns:
-        model: Trained LSTM model.
+        model: Trained XGBoost model.
     """
     logging.info("Starting model training")
-    model = build_model((X_train.shape[1], X_train.shape[2]))
-    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test), callbacks=[early_stopping])
+
+    # Default parameters
+    if params is None:
+        params = {
+            "objective": "reg:squarederror",
+            "learning_rate": 0.01,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "seed": 42
+        }
+
+    # Convert data into DMatrix
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dval = xgb.DMatrix(X_val, label=y_val)
+
+    # Train the model with early stopping
+    evals = [(dtrain, 'train'), (dval, 'validation')]
+    model = xgb.train(
+        params=params,
+        dtrain=dtrain,
+        num_boost_round=1000,
+        evals=evals,
+        early_stopping_rounds=50,
+        verbose_eval=False
+    )
+
     logging.info("Model training completed")
     return model
 
@@ -115,30 +130,42 @@ def evaluate_model(model, X_test, y_test):
         X_test, y_test: Test data.
 
     Returns:
-        None
+        dict: Evaluation metrics (RMSE, R^2).
     """
     logging.info("Evaluating model")
-    y_pred = model.predict(X_test)
+    dtest = xgb.DMatrix(X_test)
+    y_pred = model.predict(dtest)
+
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
-    logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
-    return rmse, r2
 
-def save_model(model, model_path="lstm_model.json", weights_path="lstm_model_weights.h5"):
+    logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
+    return {"RMSE": rmse, "R2": r2}
+
+def save_model_to_gcs(model, bucket_name, file_name):
     """
-    Save the trained model.
+    Save a trained model as a pickle file in Google Cloud Storage.
 
     Args:
-        model: Trained model.
-        model_path (str): Path to save the model architecture.
-        weights_path (str): Path to save the model weights.
+        model: The trained model to save.
+        bucket_name (str): Name of the GCS bucket.
+        file_name (str): Path to save the model in the GCS bucket.
 
     Returns:
         None
     """
-    logging.info(f"Saving model to {model_path} and weights to {weights_path}")
-    model_json = model.to_json()
-    with open(model_path, "w") as json_file:
-        json_file.write(model_json)
-    model.save_weights(weights_path)
-    logging.info("Model and weights saved successfully")
+    logging.info(f"Saving model to GCS bucket {bucket_name} at {file_name}")
+
+    # Initialize the GCS client and bucket
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(file_name)
+
+    # Serialize the model into a pickle object
+    output = io.BytesIO()
+    pickle.dump(model, output)
+    output.seek(0)
+
+    # Upload the pickle object to GCS
+    blob.upload_from_file(output, content_type='application/octet-stream')
+    logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")

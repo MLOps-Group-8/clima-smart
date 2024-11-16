@@ -1,29 +1,29 @@
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from airflow.operators.email import EmailOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.utils.trigger_rule import TriggerRule
-from google.cloud import storage
+from airflow.operators.email_operator import EmailOperator
 from datetime import datetime, timedelta
 import logging
 import os
 import pickle
+import pandas as pd
+import numpy as np
 from hourlymodeltraining import (
     load_data_from_gcs,
     process_data,
-    build_model,
     train_model,
-    evaluate_model,
-    save_model
+    save_model_to_gcs
 )
-from utils import save_model_to_gcs
+from hourlymodelvalidation import evaluate_and_visualize_models
+from hourlybiasdetection import calculate_metrics_for_features
+from hourlymodelsensitivity import analyze_hourly_model_sensitivity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# GCS bucket and file path
+ 
+# GCS bucket and file paths
 BUCKET_NAME = 'clima-smart-data-collection'
 ENGINEERED_HOURLY_DATA_PATH = 'weather_data/engineered_hourly_data.csv'
+HOURLY_DATA_PLOTS_PATH = 'hourly_model_validation_plots/'
 
 # Default args for the DAG
 default_args = {
@@ -38,19 +38,17 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    'ModelDevelopmentPipeline1',
+    'HourlyWeatherModelPipeline',
     default_args=default_args,
-    description='DAG for running the model development pipeline Hourly Data',
+    description='DAG for training, validating, and analyzing hourly weather models',
     schedule_interval=None,
     catchup=False,
     is_paused_upon_creation=False
 )
 
 # Temporary directory for saving data and models
-TEMP_DIR = "/tmp/airflow_model_pipeline"
-MODEL_DIR = os.path.abspath(os.path.join(os.getcwd(), "assets/models"))
+TEMP_DIR = "/tmp/airflow_hourly_model_pipeline"
 os.makedirs(TEMP_DIR, exist_ok=True)
-os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Email notification functions
 def notify_success(context):
@@ -86,117 +84,212 @@ def load_data_task(**kwargs):
 # Task to process data
 def process_data_task(**kwargs):
     logging.info("Processing data")
-
-    # Pull raw data from XCom
-    raw_data_path = kwargs['ti'].xcom_pull(key='raw_data_path', task_ids='load_data')
+    raw_data_path = kwargs['ti'].xcom_pull(key='raw_data_path', task_ids='load_hourly_data')
     with open(raw_data_path, "rb") as f:
         raw_data = pickle.load(f)
 
-    # Call the actual process_data function from model_development_pipeline_functions
-    from hourlymodeltraining import process_data
-    X_train, X_test, y_train, y_test = process_data(raw_data)
+    # Define features and targets
+    features = [
+        'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
+        'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
+        'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
+    ]
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
 
-    # Save processed data
-    X_train_path = os.path.join(TEMP_DIR, "X_train.pkl")
-    X_test_path = os.path.join(TEMP_DIR, "X_test.pkl")
-    y_train_path = os.path.join(TEMP_DIR, "y_train.pkl")
-    y_test_path = os.path.join(TEMP_DIR, "y_test.pkl")
+    processed_data = process_data(raw_data, features, targets)
 
-    with open(X_train_path, "wb") as f:
-        pickle.dump(X_train, f)
-    with open(X_test_path, "wb") as f:
-        pickle.dump(X_test, f)
-    with open(y_train_path, "wb") as f:
-        pickle.dump(y_train, f)
-    with open(y_test_path, "wb") as f:
-        pickle.dump(y_test, f)
-
-    # Push paths to XCom
-    kwargs['ti'].xcom_push(key='X_train_path', value=X_train_path)
-    kwargs['ti'].xcom_push(key='X_test_path', value=X_test_path)
-    kwargs['ti'].xcom_push(key='y_train_path', value=y_train_path)
-    kwargs['ti'].xcom_push(key='y_test_path', value=y_test_path)
-
+    # Save processed data for each target
+    for target, splits in processed_data.items():
+        for split, data_split in splits.items():
+            split_path = os.path.join(TEMP_DIR, f"{target}_{split}.pkl")
+            with open(split_path, "wb") as f:
+                pickle.dump(data_split, f)
+            kwargs['ti'].xcom_push(key=f"{target}_{split}_path", value=split_path)
     logging.info("Data processing task completed.")
 
-# Task: Build Model
-def build_model_task(**kwargs):
-    logging.info("Building model")
-    X_train_path = kwargs['ti'].xcom_pull(key='X_train_path', task_ids='process_data')
-    with open(X_train_path, "rb") as f:
-        X_train = pickle.load(f)
-
-    model = build_model((X_train.shape[1], X_train.shape[2]))
-    model_path = os.path.join(TEMP_DIR, "model.pkl")
-    with open(model_path, "wb") as f:
-        pickle.dump(model, f)
-    kwargs['ti'].xcom_push(key='model_path', value=model_path)
-    logging.info("Model building task completed.")
-
-# Task: Train Model
+# Task to train models
 def train_model_task(**kwargs):
-    logging.info("Training model")
-    X_train_path = kwargs['ti'].xcom_pull(key='X_train_path', task_ids='process_data')
-    X_test_path = kwargs['ti'].xcom_pull(key='X_test_path', task_ids='process_data')
-    y_train_path = kwargs['ti'].xcom_pull(key='y_train_path', task_ids='process_data')
-    y_test_path = kwargs['ti'].xcom_pull(key='y_test_path', task_ids='process_data')
-    model_path = kwargs['ti'].xcom_pull(key='model_path', task_ids='build_model')
+    logging.info("Training models for all targets")
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
 
-    with open(X_train_path, "rb") as f:
-        X_train = pickle.load(f)
-    with open(X_test_path, "rb") as f:
-        X_test = pickle.load(f)
-    with open(y_train_path, "rb") as f:
-        y_train = pickle.load(f)
-    with open(y_test_path, "rb") as f:
-        y_test = pickle.load(f)
-    with open(model_path, "rb") as f:
-        model = pickle.load(f)
+    for target in targets:
+        # Pull data paths from XCom
+        X_train_path = kwargs['ti'].xcom_pull(key=f"{target}_X_train_path", task_ids='process_hourly_data')
+        X_val_path = kwargs['ti'].xcom_pull(key=f"{target}_X_val_path", task_ids='process_hourly_data')
+        y_train_path = kwargs['ti'].xcom_pull(key=f"{target}_y_train_path", task_ids='process_hourly_data')
+        y_val_path = kwargs['ti'].xcom_pull(key=f"{target}_y_val_path", task_ids='process_hourly_data')
 
-    trained_model = train_model(X_train, X_test, y_train, y_test)
-    trained_model_path = os.path.join(TEMP_DIR, "trained_model.pkl")
-    with open(trained_model_path, "wb") as f:
-        pickle.dump(trained_model, f)
+        with open(X_train_path, "rb") as f:
+            X_train = pickle.load(f)
+        with open(X_val_path, "rb") as f:
+            X_val = pickle.load(f)
+        with open(y_train_path, "rb") as f:
+            y_train = pickle.load(f)
+        with open(y_val_path, "rb") as f:
+            y_val = pickle.load(f)
 
-    kwargs['ti'].xcom_push(key='trained_model_path', value=trained_model_path)
-    logging.info("Model training task completed.")
+        model = train_model(X_train, X_val, y_train, y_val)
 
-# Task: Evaluate Model
-def evaluate_model_task(**kwargs):
-    logging.info("Evaluating model")
-    X_test_path = kwargs['ti'].xcom_pull(key='X_test_path', task_ids='process_data')
-    y_test_path = kwargs['ti'].xcom_pull(key='y_test_path', task_ids='process_data')
-    trained_model_path = kwargs['ti'].xcom_pull(key='trained_model_path', task_ids='train_model')
+        # Save the model
+        model_path = os.path.join(TEMP_DIR, f"{target}_model.pkl")
+        with open(model_path, "wb") as f:
+            pickle.dump(model, f)
+        kwargs['ti'].xcom_push(key=f"{target}_model_path", value=model_path)
 
-    with open(X_test_path, "rb") as f:
-        X_test = pickle.load(f)
-    with open(y_test_path, "rb") as f:
-        y_test = pickle.load(f)
-    with open(trained_model_path, "rb") as f:
-        trained_model = pickle.load(f)
+    logging.info("Model training completed.")
 
-    rmse, r2 = evaluate_model(trained_model, X_test, y_test)
-    logging.info(f"Model evaluation completed. RMSE: {rmse}, R^2: {r2}")
+# Task to validate models
+def validate_models_task(**kwargs):
+    logging.info("Validating models and generating visualizations")
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
+    models = {}
+    processed_data = {}
 
-# Task: Save Model
-def save_model_task(**kwargs):
-    logging.info("Saving model to GCS")
+    # Retrieve models and processed data from XCom
+    for target in targets:
+        # Model
+        model_path = kwargs['ti'].xcom_pull(key=f"{target}_model_path", task_ids='train_hourly_models')
+        with open(model_path, "rb") as f:
+            models[target] = pickle.load(f)
 
-    # Get the trained model from XCom
-    trained_model_path = kwargs['ti'].xcom_pull(key='trained_model_path', task_ids='train_model')
-    with open(trained_model_path, "rb") as f:
-        trained_model = pickle.load(f)
+        # Processed data
+        processed_data[target] = {}
+        for split in ['X_val', 'X_test', 'y_val', 'y_test', 'y_train']:
+            split_path = kwargs['ti'].xcom_pull(key=f"{target}_{split}_path", task_ids='process_hourly_data')
+            with open(split_path, "rb") as f:
+                processed_data[target][split] = pickle.load(f)
 
-    # Save the model to GCS
-    save_model_to_gcs(
-        model=trained_model,
-        bucket_name="clima-smart-data-collection",
-        file_name="assets/models/final_model1.pkl"
+    # Evaluate and visualize models
+    evaluate_and_visualize_models(
+        models=models,
+        processed_data=processed_data,
+        targets=targets,
+        bucket_name=BUCKET_NAME,
+        HOURLY_DATA_PLOTS_PATH=HOURLY_DATA_PLOTS_PATH
     )
+    logging.info("Model validation and visualization task completed.")
+
+def bias_detection_task(**kwargs):
+    logging.info("Starting bias detection task")
+
+    slicing_features = ['temperature_2m', 'precipitation']  # Features to slice by
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
+    
+    # Attempt to retrieve necessary components for each target
+    for target in targets:
+        try:
+            logging.info(f"Processing target: {target}")
+
+            # Retrieve model path
+            model_path = kwargs['ti'].xcom_pull(key=f"{target}_model_path", task_ids='train_hourly_models')
+            if not model_path:
+                logging.warning(f"Model path for target {target} not found. Skipping.")
+                continue
+
+            with open(model_path, "rb") as f:
+                model = pickle.load(f)
+
+            # Retrieve scaler path
+            scaler_path = kwargs['ti'].xcom_pull(key=f"{target}_scaler_path", task_ids='process_hourly_data')
+            if not scaler_path:
+                logging.warning(f"Scaler path for target {target} not found. Skipping.")
+                continue
+
+            with open(scaler_path, "rb") as f:
+                scaler = pickle.load(f)
+
+            # Retrieve test data paths
+            X_test_path = kwargs['ti'].xcom_pull(key=f"{target}_X_test_path", task_ids='process_hourly_data')
+            y_test_path = kwargs['ti'].xcom_pull(key=f"{target}_y_test_path", task_ids='process_hourly_data')
+
+            if not X_test_path or not y_test_path:
+                logging.warning(f"Test data paths for target {target} not found. Skipping.")
+                continue
+
+            with open(X_test_path, "rb") as f:
+                X_test = pickle.load(f)
+            with open(y_test_path, "rb") as f:
+                y_test = pickle.load(f)
+
+            # Perform bias detection
+            features = [
+                'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
+                'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
+                'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
+            ]
+            data = pd.DataFrame(X_test, columns=features)
+            data[target] = y_test
+
+            # Call the bias detection function (silently perform, no output required)
+            calculate_metrics_for_features(
+                data=data,
+                features=slicing_features,
+                models={target: model},
+                scalers={target: scaler},
+                targets=[target],
+                threshold_ratio=0.1
+            )
+
+            logging.info(f"Bias detection completed for target: {target}")
+
+        except Exception as e:
+            logging.warning(f"An issue occurred with target {target}. Skipping. Error: {e}")
+
+    logging.info("Bias detection task completed. No output generated.")
+
+# Task for sensitivity analysis
+def model_sensitivity_task(**kwargs):
+    logging.info("Performing model sensitivity analysis")
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
+    models = {}
+    processed_data = {}
+
+    # Retrieve models and test data from XCom
+    for target in targets:
+        model_path = kwargs['ti'].xcom_pull(key=f"{target}_model_path", task_ids='train_hourly_models')
+        with open(model_path, "rb") as f:
+            models[target] = pickle.load(f)
+
+        X_test_path = kwargs['ti'].xcom_pull(key=f"{target}_X_test_path", task_ids='process_hourly_data')
+        with open(X_test_path, "rb") as f:
+            processed_data[target] = {"X_test": pickle.load(f)}
+
+    features = [
+        'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
+        'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
+        'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
+    ]
+
+    analyze_hourly_model_sensitivity(
+        models=models,
+        processed_data=processed_data,
+        features=features,
+        targets=targets,
+        bucket_name=BUCKET_NAME,
+        weather_data_plots_path=HOURLY_DATA_PLOTS_PATH
+    )
+    logging.info("Model sensitivity analysis completed.")
+
+# Task to save models
+def save_model_task(**kwargs):
+    logging.info("Saving models to GCS")
+    targets = ['snowfall', 'rain', 'apparent_temperature', 'wind_gusts_10m']
+
+    for target in targets:
+        model_path = kwargs['ti'].xcom_pull(key=f"{target}_model_path", task_ids='train_hourly_models')
+        with open(model_path, "rb") as f:
+            model = pickle.load(f)
+
+        save_model_to_gcs(
+            model=model,
+            bucket_name=BUCKET_NAME,
+            file_name=f"assets/hourly_models/{target}_model.pkl"
+        )
+    logging.info("All models saved to GCS.")
 
 # Define Airflow tasks
 load_data_operator = PythonOperator(
-    task_id='load_data',
+    task_id='load_hourly_data',
     python_callable=load_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
@@ -204,39 +297,47 @@ load_data_operator = PythonOperator(
 )
 
 process_data_operator = PythonOperator(
-    task_id='process_data',
+    task_id='process_hourly_data',
     python_callable=process_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
-build_model_operator = PythonOperator(
-    task_id='build_model',
-    python_callable=build_model_task,
-    provide_context=True,
-    on_failure_callback=notify_failure,
-    dag=dag
-)
-
 train_model_operator = PythonOperator(
-    task_id='train_model',
+    task_id='train_hourly_models',
     python_callable=train_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
-evaluate_model_operator = PythonOperator(
-    task_id='evaluate_model',
-    python_callable=evaluate_model_task,
+validate_models_operator = PythonOperator(
+    task_id='validate_hourly_models',
+    python_callable=validate_models_task,
+    provide_context=True,
+    on_failure_callback=notify_failure,
+    dag=dag
+)
+
+bias_detection_operator = PythonOperator(
+    task_id='bias_detection_hourly_models',
+    python_callable=bias_detection_task,
+    provide_context=True,
+    on_failure_callback=notify_failure,
+    dag=dag
+)
+
+model_sensitivity_operator = PythonOperator(
+    task_id='hourly_model_sensitivity',
+    python_callable=model_sensitivity_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 save_model_operator = PythonOperator(
-    task_id='save_model',
+    task_id='save_hourly_models',
     python_callable=save_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
@@ -244,20 +345,12 @@ save_model_operator = PythonOperator(
 )
 
 email_notification_task = EmailOperator(
-    task_id='send_email_notification',
+    task_id='send_hourly_email_notification',
     to='keshiarun01@gmail.com',
-    subject='Model Development Pipeline Completed Successfully',
-    html_content='<p>The Model Development Pipeline DAG has completed successfully.</p>',
+    subject='Hourly Model Pipeline Completed Successfully',
+    html_content='<p>The Hourly Model Pipeline DAG has completed successfully, including bias detection and sensitivity analysis.</p>',
     dag=dag
 )
 
-# Task to trigger the ModelPipeline DAG
-trigger_model_pipeline_task = TriggerDagRunOperator(
-    task_id='trigger_model_pipeline_task',
-    trigger_dag_id='ModelDevelopmentPipeline2',
-    trigger_rule=TriggerRule.ALL_DONE,  # Ensure this task runs only if all upstream tasks succeed
-    dag=dag,
-)
-
 # Set task dependencies
-load_data_operator >> process_data_operator >> build_model_operator >> train_model_operator >> evaluate_model_operator >> save_model_operator >> email_notification_task >> trigger_model_pipeline_task
+load_data_operator >> process_data_operator >> train_model_operator >> validate_models_operator >> bias_detection_operator >> model_sensitivity_operator >> save_model_operator >> email_notification_task
