@@ -7,23 +7,19 @@ import os
 import pickle
 import pandas as pd
 import numpy as np
-from hourlymodeltraining import (
+from hourly_model_training import (
     load_data_from_gcs,
     process_data,
     train_model,
     save_model_to_gcs
 )
-from hourlymodelvalidation import evaluate_and_visualize_models
-from hourlybiasdetection import calculate_metrics_for_features
-from hourlymodelsensitivity import analyze_hourly_model_sensitivity
+from hourly_model_validation import evaluate_and_visualize_models
+from hourly_bias_detection import calculate_metrics_for_features
+from hourly_model_sensitivity import analyze_hourly_model_sensitivity
+from constants import *
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
- 
-# GCS bucket and file paths
-BUCKET_NAME = 'clima-smart-data-collection'
-ENGINEERED_HOURLY_DATA_PATH = 'weather_data/engineered_hourly_data.csv'
-HOURLY_DATA_PLOTS_PATH = 'hourly_model_validation_plots/'
 
 # Default args for the DAG
 default_args = {
@@ -38,7 +34,7 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    'HourlyWeatherModelPipeline',
+    'hourly_weather_model_development_pipeline',
     default_args=default_args,
     description='DAG for training, validating, and analyzing hourly weather models',
     schedule_interval=None,

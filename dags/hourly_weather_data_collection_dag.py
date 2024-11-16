@@ -1,6 +1,8 @@
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.email import EmailOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.utils.trigger_rule import TriggerRule
 from datetime import datetime, timedelta
 import logging
 import matplotlib.pyplot as plt
@@ -211,5 +213,13 @@ email_notification_task = EmailOperator(
     dag=dag,
 )
 
+# Task to trigger the ModelPipeline DAG
+trigger_model_pipeline_task = TriggerDagRunOperator(
+    task_id='trigger_model_development_pipeline_task',
+    trigger_dag_id='hourly_weather_model_development_pipeline',
+    trigger_rule=TriggerRule.ALL_SUCCESS,  # Ensure this task runs only if all upstream tasks succeed
+    dag=dag,
+)
+
 # Set task dependencies
-fetch_and_save_weather_data_task >> preprocess_data_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task
+fetch_and_save_weather_data_task >> preprocess_data_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task >> trigger_model_pipeline_task
