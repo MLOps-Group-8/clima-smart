@@ -76,3 +76,24 @@ def load_object_from_gcs(bucket_name, source_path):
     except Exception as e:
         logging.error(f"Failed to load object from GCS at {source_path}: {e}")
         return None
+    
+def save_model_to_gcs(model, bucket_name, file_name):
+    """
+    Save a trained model as a pickle file in Google Cloud Storage.
+
+    """
+    logging.info(f"Saving model to GCS bucket {bucket_name} at {file_name}")
+    
+    # Initialize the GCS client and bucket
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(file_name)
+    
+    # Serialize the model into a pickle object
+    output = io.BytesIO()
+    pickle.dump(model, output)
+    output.seek(0)
+    
+    # Upload the pickle object to GCS
+    blob.upload_from_file(output, content_type='application/octet-stream')
+    logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")

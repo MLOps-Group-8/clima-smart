@@ -1,11 +1,14 @@
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.email import EmailOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.utils.trigger_rule import TriggerRule
+from google.cloud import storage
 from datetime import datetime, timedelta
 import logging
 import os
 import pickle
-from hourlymodeldag import (
+from hourlymodeltraining import (
     load_data_from_gcs,
     process_data,
     build_model,
@@ -13,6 +16,7 @@ from hourlymodeldag import (
     evaluate_model,
     save_model
 )
+from utils import save_model_to_gcs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,9 +38,9 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    'ModelDevelopmentPipeline',
+    'ModelDevelopmentPipeline1',
     default_args=default_args,
-    description='DAG for running the model development pipeline',
+    description='DAG for running the model development pipeline Hourly Data',
     schedule_interval=None,
     catchup=False,
     is_paused_upon_creation=False
@@ -44,7 +48,7 @@ dag = DAG(
 
 # Temporary directory for saving data and models
 TEMP_DIR = "/tmp/airflow_model_pipeline"
-MODEL_DIR = os.path.abspath(os.path.join(os.getcwd(), "/Users/keshikaarunkumar/mlops/clima-smart/clima-smart/assets/models"))
+MODEL_DIR = os.path.abspath(os.path.join(os.getcwd(), "assets/models"))
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
 
@@ -89,7 +93,7 @@ def process_data_task(**kwargs):
         raw_data = pickle.load(f)
 
     # Call the actual process_data function from model_development_pipeline_functions
-    from hourlymodeldag import process_data
+    from hourlymodeltraining import process_data
     X_train, X_test, y_train, y_test = process_data(raw_data)
 
     # Save processed data
@@ -175,27 +179,20 @@ def evaluate_model_task(**kwargs):
     logging.info(f"Model evaluation completed. RMSE: {rmse}, R^2: {r2}")
 
 # Task: Save Model
-# Task: Save Model
 def save_model_task(**kwargs):
-    """
-    Save the trained model to the assets/models/ directory.
-    """
-    logging.info("Saving model")
-    
-    # Get the trained model path from XCom
+    logging.info("Saving model to GCS")
+
+    # Get the trained model from XCom
     trained_model_path = kwargs['ti'].xcom_pull(key='trained_model_path', task_ids='train_model')
-    
-    # Load the trained model from the temporary directory
     with open(trained_model_path, "rb") as f:
         trained_model = pickle.load(f)
-    
-    # Save the model to assets/models/ directory
-    model_path = os.path.join(MODEL_DIR, "final_model.pkl")
-    with open(model_path, "wb") as f:
-        pickle.dump(trained_model, f)
-    
-    logging.info(f"Model saved successfully at {model_path}.")
-    kwargs['ti'].xcom_push(key='saved_model_path', value=model_path)  # Optional, in case downstream tasks need the path
+
+    # Save the model to GCS
+    save_model_to_gcs(
+        model=trained_model,
+        bucket_name="clima-smart-data-collection",
+        file_name="assets/models/final_model1.pkl"
+    )
 
 # Define Airflow tasks
 load_data_operator = PythonOperator(
@@ -254,5 +251,13 @@ email_notification_task = EmailOperator(
     dag=dag
 )
 
+# Task to trigger the ModelPipeline DAG
+trigger_model_pipeline_task = TriggerDagRunOperator(
+    task_id='trigger_model_pipeline_task',
+    trigger_dag_id='ModelDevelopmentPipeline2',
+    trigger_rule=TriggerRule.ALL_DONE,  # Ensure this task runs only if all upstream tasks succeed
+    dag=dag,
+)
+
 # Set task dependencies
-load_data_operator >> process_data_operator >> build_model_operator >> train_model_operator >> evaluate_model_operator >> save_model_operator >> email_notification_task
+load_data_operator >> process_data_operator >> build_model_operator >> train_model_operator >> evaluate_model_operator >> save_model_operator >> email_notification_task >> trigger_model_pipeline_task

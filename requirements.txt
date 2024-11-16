@@ -10,3 +10,5 @@ seaborn
 numpy
 tensorflow
 scikit-learn
+xgboost
+shap

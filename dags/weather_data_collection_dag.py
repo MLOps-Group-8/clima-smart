@@ -285,10 +285,11 @@ email_notification_task = EmailOperator(
 # Task to trigger the ModelPipeline DAG
 trigger_model_pipeline_task = TriggerDagRunOperator(
     task_id='trigger_model_pipeline_task',
-    trigger_dag_id='ModelDevelopmentPipeline',
+    trigger_dag_id='ModelDevelopmentPipeline1',
     trigger_rule=TriggerRule.ALL_DONE,  # Ensure this task runs only if all upstream tasks succeed
     dag=dag,
 )
+
 # Set task dependencies
 daily_weather_task >> hourly_weather_task >> preprocess_daily_task >> preprocess_hourly_task >> feature_engineering_task >> eda_and_visualizations_task >> generate_and_save_schema_stats_task >> validate_data_task >> schema_quality_test_task >> email_notification_task >> trigger_model_pipeline_task
 
