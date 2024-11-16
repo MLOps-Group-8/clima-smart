@@ -3,7 +3,7 @@ x-airflow-common:
   &airflow-common
   build: 
     context: .
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.airflow
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -18,7 +18,7 @@ x-airflow-common:
     AIRFLOW__SMTP__SMTP_STARTTLS: 'True'
     AIRFLOW__SMTP__SMTP_SSL: 'False'
     AIRFLOW__SMTP__SMTP_USER: darshan.webjaguar@gmail.com           # Gmail address
-    AIRFLOW__SMTP__SMTP_PASSWORD: ywqa jwgs lzve vvsc         # App password generated from Google
+    AIRFLOW__SMTP__SMTP_PASSWORD: xsps xcpy qdrg tamh         # App password generated from Google
     AIRFLOW__SMTP__SMTP_PORT: 587
     AIRFLOW__SMTP__SMTP_MAIL_FROM: darshan.webjaguar@gmail.com      # Same Gmail address
     AIRFLOW__SMTP__SMTP_TIMEOUT: 30                         # SMTP timeout in seconds
@@ -186,5 +186,24 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  mlflow-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    environment:
+      MLFLOW_TRACKING_URI: http://localhost:5000
+      MLFLOW_ARTIFACT_URI: /mlruns/artifacts
+      MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING: true
+    command: >
+      mlflow server --backend-store-uri sqlite:///mlflow.db 
+                    --default-artifact-root /mlflow/artifacts 
+                    --artifacts-destination /mlflow/artifacts 
+                    --host 0.0.0.0
+    ports:
+      - "5000:5000"
+    volumes:
+          - ./mlruns:/mlflow
+
 volumes:
+  mlruns:
   postgres-db-volume:
