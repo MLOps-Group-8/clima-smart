@@ -1,33 +1,24 @@
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.email_operator import EmailOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.utils.trigger_rule import TriggerRule
-from google.cloud import storage
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import logging
 import os
 import pickle
-from utils import save_model_to_gcs
-from dailymodeltraining import (
-    load_data_from_gcs,
+from utils import save_model_to_gcs, read_data_from_gcs
+from daily_model_training import (
     process_data,
     train_model,
-    save_model_to_gcs
 )
-from dailymodelvalidation import evaluate_and_visualize_model
-from dailymodelbiasdetection import calculate_metrics_for_features, bin_column
-from dailymodelsensitivity import analyze_model_sensitivity
+from daily_model_validation import evaluate_and_visualize_model
+from daily_model_bias_detection import calculate_metrics_for_features, bin_column
+from daily_model_sensitivity import analyze_model_sensitivity
+from constants import *
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# GCS bucket and file path
-BUCKET_NAME = 'clima-smart-data-collection'
-ENGINEERED_DAILY_DATA_PATH = 'weather_data/engineered_daily_data.csv'
-WEATHER_DATA_PLOTS_PATH = 'weather_data_plots/'
 
 # Default args for the DAG
 default_args = {
@@ -42,7 +33,7 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    'ModelDevelopmentPipeline2',
+    'daily_weather_model_development_pipeline',
     default_args=default_args,
     description='DAG for running the model development pipeline on daily weather data',
     schedule_interval=None,
@@ -78,7 +69,7 @@ def notify_failure(context):
 # Task to load data from GCS
 def load_data_task(**kwargs):
     logging.info("Loading data from GCS")
-    data = load_data_from_gcs(BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
+    data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
     data_path = os.path.join(TEMP_DIR, "raw_data.pkl")
     with open(data_path, "wb") as f:
         pickle.dump(data, f)
@@ -393,7 +384,7 @@ save_model_operator = PythonOperator(
 
 email_notification_task = EmailOperator(
     task_id='send_email_notification',
-    to='keshiarun01@gmail.com',
+    to='darshan.webjaguar@gmail.com',
     subject='Daily Model Development Pipeline Completed Successfully',
     html_content='<p>The Daily Model Development Pipeline DAG has completed successfully.</p>',
     dag=dag

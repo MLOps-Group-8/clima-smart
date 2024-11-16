@@ -12,26 +12,6 @@ import io
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def load_data_from_gcs(bucket_name, file_path):
-    """
-    Load engineered daily data from a GCS bucket.
-
-    Args:
-        bucket_name (str): The name of the GCS bucket.
-        file_path (str): The path to the file in the GCS bucket.
-
-    Returns:
-        pd.DataFrame: Loaded data as a Pandas DataFrame.
-    """
-    logging.info(f"Loading data from GCS bucket: {bucket_name}, file path: {file_path}")
-    client = storage.Client()
-    bucket = client.get_bucket(bucket_name)
-    blob = bucket.blob(file_path)
-    data = blob.download_as_bytes()
-    df = pd.read_csv(io.BytesIO(data))
-    logging.info("Data successfully loaded from GCS")
-    return df
-
 def process_data(data, features, targets):
     """
     Process the data for model training.
@@ -150,31 +130,3 @@ def evaluate_model(model, X_test, y_test, scaler_target):
 
     logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
     return {"RMSE": rmse, "R2": r2}
-
-def save_model_to_gcs(model, bucket_name, file_name):
-    """
-    Save a trained model as a pickle file in Google Cloud Storage.
-
-    Args:
-        model: The trained model to save.
-        bucket_name (str): Name of the GCS bucket.
-        file_name (str): Path to save the model in the GCS bucket.
-
-    Returns:
-        None
-    """
-    logging.info(f"Saving model to GCS bucket {bucket_name} at {file_name}")
-
-    # Initialize the GCS client and bucket
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-
-    # Serialize the model into a pickle object
-    output = io.BytesIO()
-    pickle.dump(model, output)
-    output.seek(0)
-
-    # Upload the pickle object to GCS
-    blob.upload_from_file(output, content_type='application/octet-stream')
-    logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")
