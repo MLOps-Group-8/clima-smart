@@ -222,7 +222,7 @@ email_notification_task = EmailOperator(
 trigger_model_pipeline_task = TriggerDagRunOperator(
     task_id='trigger_model_development_pipeline_task',
     trigger_dag_id='daily_weather_model_development_pipeline',
-    trigger_rule=TriggerRule.ALL_DONE,  # Ensure this task runs only if all upstream tasks succeed
+    trigger_rule=TriggerRule.ALL_SUCCESS,  # Ensure this task runs only if all upstream tasks succeed
     dag=dag,
 )
 
