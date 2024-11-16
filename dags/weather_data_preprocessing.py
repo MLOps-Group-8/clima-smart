@@ -1,9 +1,4 @@
-# weather_data_preprocessing.py
-
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
 from datetime import datetime, timedelta
-from google.cloud import storage
 import pandas as pd
 import numpy as np
 import logging

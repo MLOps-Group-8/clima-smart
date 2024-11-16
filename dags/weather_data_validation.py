@@ -44,10 +44,9 @@ def test_schema_similarity(schema1, schema2):
     else:
         logging.info("Schemas for daily and hourly data match.")
 
-def validate_weather_data(daily_data, hourly_data):
-    """Run custom data validation checks on daily and hourly data."""
-    # Load the engineered data from GCS
-    logging.info("Loading engineered daily and hourly data from GCS.")
+
+def validate_daily_weather_data(daily_data):
+    """Run custom data validation checks on daily data."""
 
     # Run validation checks on daily data
     logging.info("Running validation checks on daily data.")
@@ -55,6 +54,11 @@ def validate_weather_data(daily_data, hourly_data):
     test_positive_temperatures(daily_data, "Daily Data")
     test_precipitation_non_negative(daily_data, "Daily Data")
 
+    logging.info("Data validation completed.")
+
+def validate_hourly_weather_data(hourly_data):
+    """Run custom data validation checks on hourly data."""
+   
     # Run validation checks on hourly data
     logging.info("Running validation checks on hourly data.")
     test_no_nulls(hourly_data, "Hourly Data")
@@ -63,17 +67,27 @@ def validate_weather_data(daily_data, hourly_data):
 
     logging.info("Data validation completed.")
 
-def test_data_quality_and_schema(daily_schema, hourly_schema):
-    """Test data quality and schema similarity by loading schemas from GCS and running tests."""
+
+
+def test_daily_data_quality_and_schema(daily_schema):
+    """Test data quality by loading schemas from GCS and running tests."""
    
     # Log types for debugging
     logging.info(f"Type of daily_schema: {type(daily_schema)}")
-    logging.info(f"Type of hourly_schema: {type(hourly_schema)}")
     
     # Ensure schemas are dictionaries
-    if not isinstance(daily_schema, dict) or not isinstance(hourly_schema, dict):
+    if not isinstance(daily_schema, dict):
         logging.error("Schemas are not in the expected dictionary format. Exiting validation.")
         return
     
-    # Run schema similarity test
-    test_schema_similarity(daily_schema, hourly_schema)
+
+def test_hourly_data_quality_and_schema(hourly_schema):
+    """Test data quality by loading schemas from GCS and running tests."""
+   
+    # Log types for debugging
+    logging.info(f"Type of hourly_schema: {type(hourly_schema)}")
+    
+    # Ensure schemas are dictionaries
+    if not isinstance(hourly_schema, dict):
+        logging.error("Schemas are not in the expected dictionary format. Exiting validation.")
+        return
