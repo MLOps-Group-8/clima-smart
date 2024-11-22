@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clima-smart-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: clima-smart
+  template:
+    metadata:
+      labels:
+        app: clima-smart
+    spec:
+      containers:
+      - name: clima-smart-container
+        image: gcr.io/clima-smart/clima-smart:latest
+        ports:
+        - containerPort: 80
