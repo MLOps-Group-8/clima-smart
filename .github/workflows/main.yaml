@@ -66,25 +66,35 @@ jobs:
 
     - name: Build and Push Images
       run: |
-        # Build all services with a `build` section
+        # Build all services
         docker compose build
 
-        # List all built images
-        echo "Listing built images..."
+        # List services for debugging
+        echo "Services in docker-compose.yaml:"
+        docker compose config --services
+
+        # List images for debugging
+        echo "Built images:"
         docker images
 
-        # Push all services
-        echo "Pushing images..."
-        docker compose push
-
-        # Debug docker-compose.yaml configuration
-        echo "Verifying docker-compose.yaml..."
-        docker compose config
+        # Dynamically tag and push each service
+        services=$(docker compose config --services)
+        for service in $services; do
+          # Tag the image dynamically
+          image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$service:$IMAGE_TAG"
+          echo "Tagging $service as $image"
+          docker tag $service:latest $image
+          
+          # Push the image to the registry
+          echo "Pushing $image"
+          docker push $image
+        done
 
 
     - name: Install GKE Auth Plugin
       run: |
         sudo apt-get update
+        sudo apt-get install apt-transport-https ca-certificates gnupg
         sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
     - name: Configure kubectl
