@@ -23,15 +23,15 @@ jobs:
 
     steps:
     -name: Credentials verification
-      - run: 'echo "$GCP_SA_KEY"'
-        shell: bash
+      -shell: bash
         env:
           GCP_SA_KEY: ${secrets.GCP_SA_KEY}}
+        run: 'echo "$GCP_SA_KEY"'
       
-      - run: 'echo "$GCP_PROJECT_ID"'
-        shell: bash
+      -shell: bash
         env:
           GCP_PROJECT_ID: ${{secrets.GCP_PROJECT_ID}}
+        run: 'echo "$GCP_PROJECT_ID"'
 
     - name: Checkout Code
       uses: actions/checkout@v3
