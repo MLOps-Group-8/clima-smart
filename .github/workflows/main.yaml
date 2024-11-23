@@ -68,7 +68,7 @@ jobs:
       run: |
         # Build all services with a `build` section in the docker-compose.yaml
         docker compose build
-        docker compose push $REGION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/mlops:latest --verbose
+        docker compose push $REGION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/mlops:latest
 
     - name: Install GKE Auth Plugin
       run: |
