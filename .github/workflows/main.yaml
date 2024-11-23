@@ -7,27 +7,75 @@ on:
 
 jobs:
   build-and-deploy:
+    name: Build and Deploy to GKE
     runs-on: ubuntu-latest
+
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      CLUSTER_NAME: mlops-cluster
+      GKE_ZONE: us-east1-b
+      IMAGE_TAG: ${{ github.sha }}
+      DOCKER_COMPOSE_FILE: docker-compose.yaml
+      REPO_NAME: clima-smart-repo
+      REGION: us-east1
+      NODE_COUNT: 3
+      MACHINE_TYPE: e2-medium
+
     steps:
-      - run: 'echo "$GCP_SA_KEY"'
+    -name: Credentials verification
+      - run: 'echo "${{secrets.GCP_SA_KEY}}"'
         shell: bash
         env:
           GCP_SA_KEY: ${{secrets.GCP_SA_KEY}}
       
-      - run: 'echo "$GCP_PROJECT_ID"'
+      - run: 'echo "${{secrets.GCP_PROJECT_ID}}"'
         shell: bash
         env:
           GCP_PROJECT_ID: ${{secrets.GCP_PROJECT_ID}}
 
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: 'latest'
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker
+    - name: Configure Docker Authentication for Artifact Registry
+      run: |
+        gcloud auth configure-docker $REGION-docker.pkg.dev
+
+    - name: Create GKE Cluster (if not exists)
+      run: |
+        CLUSTER_EXISTS=$(gcloud container clusters list --filter="name=$CLUSTER_NAME AND zone:$GKE_ZONE" --format="value(name)")
+        if [[ -z "$CLUSTER_EXISTS" ]]; then
+          echo "Creating GKE cluster: $CLUSTER_NAME in zone $GKE_ZONE"
+          gcloud container clusters create $CLUSTER_NAME \
+            --zone $GKE_ZONE \
+            --num-nodes $NODE_COUNT \
+            --machine-type $MACHINE_TYPE \
+            --enable-ip-alias \
+            --project $PROJECT_ID
+        else
+          echo "Cluster $CLUSTER_NAME already exists."
+        fi
+
+    - name: Build and Push Images
+      run: |
+        services=$(cat $DOCKER_COMPOSE_FILE | yq '.services | keys | .[]')
+        for service in $services; do
+          image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$service:$IMAGE_TAG"
+          docker build -t $image -f ./Dockerfile ./services/$service
+          docker push $image
+        done
+
+    - name: Configure kubectl
+      run: |
+        gcloud container clusters get-credentials $CLUSTER_NAME --zone $GKE_ZONE --project $PROJECT_ID
+
+    - name: Deploy to GKE
+      run: |
+        sed -i "s|<image-path>|$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME|g" k8s-deployment.yaml
+        kubectl apply -f k8s-deployment.yaml
+        kubectl apply -f k8s-services.yaml
