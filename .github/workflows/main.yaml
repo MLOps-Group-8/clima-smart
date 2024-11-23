@@ -22,13 +22,12 @@ jobs:
       MACHINE_TYPE: e2-medium
 
     steps:
-    - name: Debug Secrets
-      env:
-        PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+    - name: Write and Inspect GCP SA Key
       run: |
-        echo "Project ID: $PROJECT_ID"
-        echo "Project ID: $GCP_PROJECT_ID"
+        echo "$GCP_SA_KEY" > sa-key.json
+        cat sa-key.json | jq
+      env:
+        GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
 
     - name: Credentials verification
       shell: bash
