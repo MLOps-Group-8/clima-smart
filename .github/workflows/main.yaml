@@ -3,12 +3,22 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main
+      - model-deployment-ds
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
+      - run: 'echo "$GCP_SA_KEY"'
+        shell: bash
+        env:
+          GCP_SA_KEY: ${{secrets.GCP_SA_KEY}}
+      
+      - run: 'echo "$GCP_PROJECT_ID"'
+        shell: bash
+        env:
+          GCP_PROJECT_ID: ${{secrets.GCP_PROJECT_ID}}
+
       - name: Checkout Repository
         uses: actions/checkout@v3
 
@@ -21,16 +31,3 @@ jobs:
 
       - name: Configure Docker
         run: gcloud auth configure-docker
-
-      - name: Build Docker Image
-        run: |
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/clima-smart:latest .
-
-      - name: Push Docker Image
-        run: |
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/clima-smart:latest
-
-      - name: Deploy to GKE
-        run: |
-          gcloud container clusters get-credentials clima-smart-cluster-1 --zone us-east-1
-          kubectl apply -f k8s-deployment.yaml
