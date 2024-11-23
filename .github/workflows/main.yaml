@@ -65,12 +65,18 @@ jobs:
 
     - name: Build and Push Images
       run: |
+        # Build all services with a `build` section in the docker-compose.yaml
+        docker compose build
+        
+        # Push the built images to the Artifact Registry
         services=$(cat $DOCKER_COMPOSE_FILE | yq '.services | keys | .[]')
         for service in $services; do
           image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$service:$IMAGE_TAG"
-          docker build -t $image -f ./Dockerfile ./services/$service
+          echo "Tagging and pushing $service"
+          docker tag $service:latest $image
           docker push $image
         done
+
 
     - name: Configure kubectl
       run: |
