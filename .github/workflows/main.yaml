@@ -22,16 +22,14 @@ jobs:
       MACHINE_TYPE: e2-medium
 
     steps:
-    -name: Credentials verification
-      -shell: bash
-        env:
-          GCP_SA_KEY: ${secrets.GCP_SA_KEY}}
-        run: 'echo "$GCP_SA_KEY"'
-      
-      -shell: bash
-        env:
-          GCP_PROJECT_ID: ${{secrets.GCP_PROJECT_ID}}
-        run: 'echo "$GCP_PROJECT_ID"'
+    - name: Credentials verification
+      shell: bash
+      env:
+        GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      run: |
+        echo "Service Account Key: $GCP_SA_KEY"
+        echo "Project ID: $GCP_PROJECT_ID"
 
     - name: Checkout Code
       uses: actions/checkout@v3
