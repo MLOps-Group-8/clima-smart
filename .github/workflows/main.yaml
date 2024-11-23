@@ -20,6 +20,7 @@ jobs:
       REGION: us-east1
       NODE_COUNT: 3
       MACHINE_TYPE: e2-medium
+      GAR_REPOSITORY: clima-smart-repo
 
     steps:
     - name: Credentials verification
@@ -67,9 +68,12 @@ jobs:
       run: |
         # Build all services with a `build` section in the docker-compose.yaml
         docker compose build
-        docker compose push
-        
+        docker compose push $REGION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/mlops:latest --verbose
 
+    - name: Install GKE Auth Plugin
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
 
     - name: Configure kubectl
       run: |
