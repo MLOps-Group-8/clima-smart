@@ -66,9 +66,21 @@ jobs:
 
     - name: Build and Push Images
       run: |
-        # Build all services with a `build` section in the docker-compose.yaml
+        # Build all services with a `build` section
         docker compose build
-        docker compose push --verbose
+
+        # List all built images
+        echo "Listing built images..."
+        docker images
+
+        # Push all services
+        echo "Pushing images..."
+        docker compose push
+
+        # Debug docker-compose.yaml configuration
+        echo "Verifying docker-compose.yaml..."
+        docker compose config
+
 
     - name: Install GKE Auth Plugin
       run: |
