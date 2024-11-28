@@ -1,13 +1,13 @@
 import logging
+import pickle
 import pandas as pd
 import numpy as np
-import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score
-import pickle
-from google.cloud import storage
-import io
+from sklearn.metrics import mean_squared_error
+from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
+import xgboost as xgb
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,17 +35,9 @@ def load_data_from_gcs(bucket_name, file_path):
 def process_data(data, features, targets):
     """
     Process the data for model training.
-
-    Args:
-        data (pd.DataFrame): Raw data.
-        features (list): List of feature column names.
-        targets (list): List of target column names.
-
-    Returns:
-        dict: Processed data split for each target variable and scalers.
     """
     logging.info("Processing data for model training")
-
+    
     # Fill missing values
     data.ffill(inplace=True)
 
@@ -62,7 +54,7 @@ def process_data(data, features, targets):
         data[target] = scaler_target.fit_transform(data[[target]])
 
         # Split the data into features (X) and target (y)
-        X = data[features]  # Retain as DataFrame
+        X = data[features]
         y = data[target].values
 
         # Train/Validation/Test Split
@@ -82,72 +74,51 @@ def process_data(data, features, targets):
     logging.info("Data processing completed")
     return processed_data, scaler_features, target_scalers
 
-def train_model(X_train, X_val, y_train, y_val, params=None):
+def train_model(X_train, X_val, y_train, y_val, params):
     """
     Train an XGBoost model with early stopping.
-
-    Args:
-        X_train, X_val: Feature matrices for training and validation.
-        y_train, y_val: Target vectors for training and validation.
-        params (dict): Hyperparameters for the XGBoost model.
-
-    Returns:
-        model: Trained XGBoost model.
     """
-    logging.info("Starting model training")
-
-    # Default parameters
-    if params is None:
-        params = {
-            "objective": "reg:squarederror",
-            "learning_rate": 0.01,
-            "max_depth": 6,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "seed": 42
-        }
-
-    # Convert data into DMatrix
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dval = xgb.DMatrix(X_val, label=y_val)
 
-    # Train the model with early stopping
     evals = [(dtrain, 'train'), (dval, 'validation')]
     model = xgb.train(
         params=params,
         dtrain=dtrain,
-        num_boost_round=1000,
+        num_boost_round=200,
         evals=evals,
-        early_stopping_rounds=50,
+        early_stopping_rounds=10,
         verbose_eval=False
     )
-
-    logging.info("Model training completed")
     return model
 
-def evaluate_model(model, X_test, y_test, scaler_target):
+def hyperparameter_tuning(data, space, max_evals=10):
     """
-    Evaluate the trained model.
-
-    Args:
-        model: Trained model.
-        X_test, y_test: Test data.
-        scaler_target: Scaler for inverse-transforming target values.
-
-    Returns:
-        dict: Evaluation metrics (RMSE, R^2).
+    Perform hyperparameter tuning using Hyperopt.
     """
-    logging.info("Evaluating model")
-    dtest = xgb.DMatrix(X_test)
-    y_pred = model.predict(dtest)
+    def objective(params):
+        params["max_depth"] = int(params["max_depth"])
+        params["objective"] = "reg:squarederror"
+        params["seed"] = 42
 
-    # Inverse-transform predictions and actual target values
-    y_test_actual = scaler_target.inverse_transform(y_test.reshape(-1, 1))
-    y_pred_actual = scaler_target.inverse_transform(y_pred.reshape(-1, 1))
+        model = train_model(
+            data["X_train"], data["X_val"], data["y_train"], data["y_val"], params
+        )
+        dval = xgb.DMatrix(data["X_val"])
+        y_pred = model.predict(dval)
+        rmse = np.sqrt(mean_squared_error(data["y_val"], y_pred))
+        return {"loss": rmse, "status": STATUS_OK, "model": model}
 
-    rmse = np.sqrt(mean_squared_error(y_test_actual, y_pred_actual))
-    r2 = r2_score(y_test_actual, y_pred_actual)
+    trials = Trials()
+    best = fmin(
+        fn=objective,
+        space=space,
+        algo=tpe.suggest,
+        max_evals=max_evals,
+        trials=trials
+    )
 
+<<<<<<< Updated upstream:dags/dailymodeltraining.py
     logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
     return {"RMSE": rmse, "R2": r2}
 
@@ -178,3 +149,47 @@ def save_model_to_gcs(model, bucket_name, file_name):
     # Upload the pickle object to GCS
     blob.upload_from_file(output, content_type='application/octet-stream')
     logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")
+=======
+    best_model_index = np.argmin([trial["result"]["loss"] for trial in trials.trials])
+    best_model = trials.trials[best_model_index]["result"]["model"]
+    return best_model, best
+
+def run_model_training(data_path, output_file):
+    """
+    Main function to process data, perform hyperparameter tuning, and save the best models.
+    """
+    with open(data_path, "rb") as f:
+        data = pickle.load(f)
+
+    features = [
+        'temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 'rain_sum',
+        'showers_sum', 'daylight_duration', 'precipitation_sum', 'temperature_range',
+        'diurnal_temp_range', 'precipitation_intensity'
+    ]
+    targets = ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']
+
+    processed_data, _, _ = process_data(data, features, targets)
+
+    space = {
+        'max_depth': hp.quniform('max_depth', 3, 5, 1),
+        'learning_rate': hp.uniform('learning_rate', 0.05, 0.1),
+        'subsample': hp.uniform('subsample', 0.7, 0.8),
+        'colsample_bytree': hp.uniform('colsample_bytree', 0.7, 0.8),
+    }
+
+    # Dictionary to store all trained models
+    all_models = {}
+
+    for target, splits in processed_data.items():
+        best_model, best_params = hyperparameter_tuning(splits, space)
+        all_models[target] = {"model": best_model, "best_params": best_params}
+
+        logging.info(f"Best model for {target} trained successfully")
+
+    # Save all models together in a single .pkl file
+    with open(output_file, "wb") as f:
+        pickle.dump(all_models, f)
+    
+    logging.info(f"All models saved together at {output_file}")
+    return output_file
+>>>>>>> Stashed changes:dags/daily_model_training.py

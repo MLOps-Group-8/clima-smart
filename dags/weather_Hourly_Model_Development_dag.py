@@ -37,8 +37,13 @@ default_args = {
 }
 
 # Define the DAG
+<<<<<<< Updated upstream:dags/weather_Hourly_Model_Development_dag.py
 dag = DAG(
     'HourlyWeatherModelPipeline',
+=======
+dag5 = DAG(
+    'hourly_weather_model_development_pipeline',
+>>>>>>> Stashed changes:dags/hourly_weather_model_development_dag.py
     default_args=default_args,
     description='DAG for training, validating, and analyzing hourly weather models',
     schedule_interval=None,
@@ -293,7 +298,7 @@ load_data_operator = PythonOperator(
     python_callable=load_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 process_data_operator = PythonOperator(
@@ -301,7 +306,7 @@ process_data_operator = PythonOperator(
     python_callable=process_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 train_model_operator = PythonOperator(
@@ -309,7 +314,7 @@ train_model_operator = PythonOperator(
     python_callable=train_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 validate_models_operator = PythonOperator(
@@ -317,7 +322,7 @@ validate_models_operator = PythonOperator(
     python_callable=validate_models_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 bias_detection_operator = PythonOperator(
@@ -325,7 +330,7 @@ bias_detection_operator = PythonOperator(
     python_callable=bias_detection_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 model_sensitivity_operator = PythonOperator(
@@ -333,7 +338,7 @@ model_sensitivity_operator = PythonOperator(
     python_callable=model_sensitivity_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 save_model_operator = PythonOperator(
@@ -341,7 +346,7 @@ save_model_operator = PythonOperator(
     python_callable=save_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
-    dag=dag
+    dag=dag5
 )
 
 email_notification_task = EmailOperator(
@@ -349,7 +354,7 @@ email_notification_task = EmailOperator(
     to='keshiarun01@gmail.com',
     subject='Hourly Model Pipeline Completed Successfully',
     html_content='<p>The Hourly Model Pipeline DAG has completed successfully, including bias detection and sensitivity analysis.</p>',
-    dag=dag
+    dag=dag5
 )
 
 # Set task dependencies
