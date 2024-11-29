@@ -12,26 +12,6 @@ import os
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def load_data_from_gcs(bucket_name, file_path):
-    """
-    Load engineered daily data from a GCS bucket.
-
-    Args:
-        bucket_name (str): The name of the GCS bucket.
-        file_path (str): The path to the file in the GCS bucket.
-
-    Returns:
-        pd.DataFrame: Loaded data as a Pandas DataFrame.
-    """
-    logging.info(f"Loading data from GCS bucket: {bucket_name}, file path: {file_path}")
-    client = storage.Client()
-    bucket = client.get_bucket(bucket_name)
-    blob = bucket.blob(file_path)
-    data = blob.download_as_bytes()
-    df = pd.read_csv(io.BytesIO(data))
-    logging.info("Data successfully loaded from GCS")
-    return df
-
 def process_data(data, features, targets):
     """
     Process the data for model training.
@@ -46,16 +26,12 @@ def process_data(data, features, targets):
     data[features] = scaler_features.fit_transform(data[features])
 
     processed_data = {}
-    target_scalers = {}
 
     for target in targets:
-        # Normalize the target variable
-        scaler_target = StandardScaler()
-        data[target] = scaler_target.fit_transform(data[[target]])
-
+        # No target scaling; use raw target values
         # Split the data into features (X) and target (y)
         X = data[features]
-        y = data[target].values
+        y = data[target]
 
         # Train/Validation/Test Split
         X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -63,16 +39,15 @@ def process_data(data, features, targets):
 
         processed_data[target] = {
             "X_train": X_train,
-            "X_val": X_val,
-            "X_test": X_test,
-            "y_train": y_train,
-            "y_val": y_val,
-            "y_test": y_test
+            "X_val": X_val,  # Features only
+            "X_test": X_test,  # Features only
+            "y_train": y_train,  # Targets
+            "y_val": y_val,  # Targets
+            "y_test": y_test,  # Targets
         }
-        target_scalers[target] = scaler_target
 
     logging.info("Data processing completed")
-    return processed_data, scaler_features, target_scalers
+    return processed_data, scaler_features, None
 
 def train_model(X_train, X_val, y_train, y_val, params):
     """
@@ -118,45 +93,22 @@ def hyperparameter_tuning(data, space, max_evals=10):
         trials=trials
     )
 
-<<<<<<< Updated upstream:dags/dailymodeltraining.py
-    logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
-    return {"RMSE": rmse, "R2": r2}
-
-def save_model_to_gcs(model, bucket_name, file_name):
-    """
-    Save a trained model as a pickle file in Google Cloud Storage.
-
-    Args:
-        model: The trained model to save.
-        bucket_name (str): Name of the GCS bucket.
-        file_name (str): Path to save the model in the GCS bucket.
-
-    Returns:
-        None
-    """
-    logging.info(f"Saving model to GCS bucket {bucket_name} at {file_name}")
-
-    # Initialize the GCS client and bucket
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-
-    # Serialize the model into a pickle object
-    output = io.BytesIO()
-    pickle.dump(model, output)
-    output.seek(0)
-
-    # Upload the pickle object to GCS
-    blob.upload_from_file(output, content_type='application/octet-stream')
-    logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")
-=======
     best_model_index = np.argmin([trial["result"]["loss"] for trial in trials.trials])
     best_model = trials.trials[best_model_index]["result"]["model"]
     return best_model, best
 
-def run_model_training(data_path, output_file):
+def run_model_training(data_path, output_file, task_instance):
     """
-    Main function to process data, perform hyperparameter tuning, and save the best models.
+    Main function to process data, perform hyperparameter tuning, and save individual models
+    as well as a combined file with all models.
+
+    Args:
+        data_path (str): Path to the input data file.
+        output_file (str): Path for the combined all_models.pkl file.
+        task_instance: Airflow TaskInstance object to push XCom values.
+
+    Returns:
+        str: Path to the combined models file (all_models.pkl).
     """
     with open(data_path, "rb") as f:
         data = pickle.load(f)
@@ -168,6 +120,7 @@ def run_model_training(data_path, output_file):
     ]
     targets = ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']
 
+    # Process the data
     processed_data, _, _ = process_data(data, features, targets)
 
     space = {
@@ -180,16 +133,30 @@ def run_model_training(data_path, output_file):
     # Dictionary to store all trained models
     all_models = {}
 
-    for target, splits in processed_data.items():
-        best_model, best_params = hyperparameter_tuning(splits, space)
-        all_models[target] = {"model": best_model, "best_params": best_params}
+    # Directory to save individual target models
+    target_models_dir = os.path.join(os.path.dirname(output_file), "target_models")
+    os.makedirs(target_models_dir, exist_ok=True)
 
-        logging.info(f"Best model for {target} trained successfully")
+    for target, splits in processed_data.items():
+        # Train the best model for the target
+        best_model, best_params = hyperparameter_tuning(splits, space)
+        
+        # Save the best model for the target as an individual .pkl file
+        target_model_path = os.path.join(target_models_dir, f"{target}_model.pkl")
+        with open(target_model_path, "wb") as f:
+            pickle.dump({"model": best_model, "best_params": best_params}, f)
+        
+        logging.info(f"Best model for {target} saved at {target_model_path}")
+
+        # Push the individual model path to XCom for the specific target
+        task_instance.xcom_push(key=f"{target}_model_path", value=target_model_path)
+
+        # Add the model and its parameters to the all_models dictionary
+        all_models[target] = {"model": best_model, "best_params": best_params}
 
     # Save all models together in a single .pkl file
     with open(output_file, "wb") as f:
         pickle.dump(all_models, f)
-    
+
     logging.info(f"All models saved together at {output_file}")
     return output_file
->>>>>>> Stashed changes:dags/daily_model_training.py

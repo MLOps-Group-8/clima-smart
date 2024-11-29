@@ -3,7 +3,7 @@ x-airflow-common:
   &airflow-common
   build: 
     context: .
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.airflow
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -186,10 +186,6 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-<<<<<<< Updated upstream
-volumes:
-  postgres-db-volume:
-=======
   mlflow-server:
     build:
       context: .
@@ -211,4 +207,3 @@ volumes:
 volumes:
   mlruns:
   postgres-db-volume:
->>>>>>> Stashed changes

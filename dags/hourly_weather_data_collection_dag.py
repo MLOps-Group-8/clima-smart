@@ -35,7 +35,7 @@ default_args = {
     'retry_delay': timedelta(minutes=2),
 }
 
-dag4 = DAG('hourly_weather_data_pipeline', default_args=default_args, 
+dag = DAG('hourly_weather_data_pipeline', default_args=default_args, 
           description = 'DAG to collect, preprocess, and analyze hourly weather data', 
           schedule_interval=None,
           catchup=False)
@@ -151,28 +151,28 @@ fetch_and_save_weather_data_task = PythonOperator(
     task_id='fetch_and_save_weather_data',
     python_callable=get_weather_data,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 preprocess_data_task = PythonOperator(
     task_id='preprocess_weather_data',
     python_callable=preprocess_weather_data,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 feature_engineering_task = PythonOperator(
     task_id='feature_engineering',
     python_callable=perform_feature_engineering,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 eda_and_visualizations_task = PythonOperator(
     task_id='eda_and_visualization',
     python_callable=eda_and_visualizations,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 
@@ -186,7 +186,7 @@ generate_and_save_schema_stats_task = PythonOperator(
         'destination_path': 'weather_data_validation'
     },
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 # Validation tasks
@@ -194,14 +194,14 @@ validate_data_task = PythonOperator(
     task_id='validate_weather_data',
     python_callable=validate_weather_data,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 schema_quality_test_task = PythonOperator(
     task_id='test_data_quality_and_schema',
     python_callable=test_weather_data_quality_and_schema,
     on_failure_callback=notify_failure,
-    dag=dag4
+    dag=dag
 )
 
 # Email notification task
@@ -210,15 +210,15 @@ email_notification_task = EmailOperator(
     to='darshan.webjaguar@gmail.com',
     subject='Hourly data collection dag Completed Successfully',
     html_content='<p>Dag Completed</p>',
-    dag=dag4,
+    dag=dag,
 )
 
 # Task to trigger the ModelPipeline DAG
 trigger_model_pipeline_task = TriggerDagRunOperator(
     task_id='trigger_model_development_pipeline_task',
-    trigger_dag_id='hourly_weather_model_development_pipeline',
+    trigger_dag_id='hourly_weather_model_development_pipeline_v2',
     trigger_rule=TriggerRule.ALL_SUCCESS,  # Ensure this task runs only if all upstream tasks succeed
-    dag=dag4,
+    dag=dag,
 )
 
 # Set task dependencies
