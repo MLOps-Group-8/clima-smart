@@ -6,8 +6,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score
 import pickle
-from google.cloud import storage
-import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -15,14 +13,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def process_data(data, features, targets):
     """
     Process the data for model training.
-
-    Args:
-        data (pd.DataFrame): Raw data.
-        features (list): List of feature column names.
-        targets (list): List of target column names.
-
-    Returns:
-        dict: Processed data split for each target variable and scalers.
     """
     logging.info("Processing data for model training")
 
@@ -42,7 +32,7 @@ def process_data(data, features, targets):
         data[target] = scaler_target.fit_transform(data[[target]])
 
         # Split the data into features (X) and target (y)
-        X = data[features]  # Retain as DataFrame
+        X = data[features]
         y = data[target].values
 
         # Train/Validation/Test Split
@@ -65,14 +55,6 @@ def process_data(data, features, targets):
 def train_model(X_train, X_val, y_train, y_val, params=None):
     """
     Train an XGBoost model with early stopping.
-
-    Args:
-        X_train, X_val: Feature matrices for training and validation.
-        y_train, y_val: Target vectors for training and validation.
-        params (dict): Hyperparameters for the XGBoost model.
-
-    Returns:
-        model: Trained XGBoost model.
     """
     logging.info("Starting model training")
 
@@ -108,14 +90,6 @@ def train_model(X_train, X_val, y_train, y_val, params=None):
 def evaluate_model(model, X_test, y_test, scaler_target):
     """
     Evaluate the trained model.
-
-    Args:
-        model: Trained model.
-        X_test, y_test: Test data.
-        scaler_target: Scaler for inverse-transforming target values.
-
-    Returns:
-        dict: Evaluation metrics (RMSE, R^2).
     """
     logging.info("Evaluating model")
     dtest = xgb.DMatrix(X_test)
@@ -130,3 +104,22 @@ def evaluate_model(model, X_test, y_test, scaler_target):
 
     logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
     return {"RMSE": rmse, "R2": r2}
+
+def save_models(models, filename="models.pkl"):
+    """
+    Save the trained models as a single pickle file.
+    """
+    logging.info(f"Saving all models to {filename}")
+    with open(filename, 'wb') as f:
+        pickle.dump(models, f)
+    logging.info("All models saved successfully")
+
+def load_models(filename="models.pkl"):
+    """
+    Load models from a pickle file.
+    """
+    logging.info(f"Loading models from {filename}")
+    with open(filename, 'rb') as f:
+        models = pickle.load(f)
+    logging.info("Models loaded successfully")
+    return models
