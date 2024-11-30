@@ -18,7 +18,7 @@ default_args = {
     'retry_delay': timedelta(minutes=2),
 }
 
-dag1 = DAG('weather_forecasting_pipeline', default_args=default_args, 
+dag = DAG('weather_forecasting_pipeline', default_args=default_args, 
           description = 'DAG to collect, preprocess, analyze and develope models for weather data', 
           schedule_interval=None,
           catchup=False)
@@ -26,19 +26,19 @@ dag1 = DAG('weather_forecasting_pipeline', default_args=default_args,
 start_task = BashOperator(
     task_id="start_task",
     bash_command="echo 'Starting the weather forecasting pipelines'",
-    dag=dag1,
+    dag=dag,
   )
 
 daily_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
     task_id="daily_weather_data_forecasting_trigger",
     trigger_dag_id="daily_weather_data_pipeline",
-    dag=dag1,
+    dag=dag,
 )
 
 hourly_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
     task_id="hourly_weather_data_forecasting_trigger",
     trigger_dag_id="hourly_weather_data_pipeline",
-    dag=dag1,
+    dag=dag,
 )
 
 email_notification_task = EmailOperator(
@@ -46,7 +46,7 @@ email_notification_task = EmailOperator(
     to='darshan.webjaguar@gmail.com',
     subject='Daily Weather Data Forecasting Pipeline Completed',
     html_content='<p>Dag Completed</p>',
-    dag=dag1,
+    dag=dag,
 )
 
 # Set task dependencies

@@ -11,4 +11,4 @@ HOURLY_DATA_PATH = 'weather_data/hourly_weather_data.csv'
 PREPROCESSED_DAILY_DATA_PATH = 'weather_data/preprocessed_daily_data.csv'
 PREPROCESSED_HOURLY_DATA_PATH = 'weather_data/preprocessed_hourly_data.csv'
 WEATHER_DATA_PLOTS_PATH = 'weather_data_plots/'
-
+HOURLY_DATA_PLOTS_PATH = 'hourly_model_validation_plots/'
