@@ -15,13 +15,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def load_data_from_gcs(bucket_name, file_path):
     """
     Load engineered hourly data from a GCS bucket.
-
-    Args:
-        bucket_name (str): The name of the GCS bucket.
-        file_path (str): The path to the file in the GCS bucket.
-
-    Returns:
-        pd.DataFrame: Loaded data as a Pandas DataFrame.
     """
     logging.info(f"Loading data from GCS bucket: {bucket_name}, file path: {file_path}")
     client = storage.Client()
@@ -35,14 +28,6 @@ def load_data_from_gcs(bucket_name, file_path):
 def process_data(data, features, targets):
     """
     Process the data for hourly model training.
-
-    Args:
-        data (pd.DataFrame): Raw data.
-        features (list): List of feature column names.
-        targets (list): List of target column names.
-
-    Returns:
-        dict: Processed data split for each target variable.
     """
     logging.info("Processing data for model training")
     data.dropna(subset=features + targets, inplace=True)
@@ -52,6 +37,7 @@ def process_data(data, features, targets):
     data[features] = scaler_features.fit_transform(data[features])
 
     processed_data = {}
+    target_scalers = {}
 
     for target in targets:
         # Normalize the target variable
@@ -74,21 +60,14 @@ def process_data(data, features, targets):
             "y_val": y_val,
             "y_test": y_test
         }
+        target_scalers[target] = scaler_target
 
     logging.info("Data processing completed")
-    return processed_data
+    return processed_data, scaler_features, target_scalers
 
 def train_model(X_train, X_val, y_train, y_val, params=None):
     """
     Train an XGBoost model with early stopping.
-
-    Args:
-        X_train, X_val: Feature matrices for training and validation.
-        y_train, y_val: Target vectors for training and validation.
-        params (dict): Hyperparameters for the XGBoost model.
-
-    Returns:
-        model: Trained XGBoost model.
     """
     logging.info("Starting model training")
 
@@ -124,13 +103,6 @@ def train_model(X_train, X_val, y_train, y_val, params=None):
 def evaluate_model(model, X_test, y_test):
     """
     Evaluate the trained model.
-
-    Args:
-        model: Trained model.
-        X_test, y_test: Test data.
-
-    Returns:
-        dict: Evaluation metrics (RMSE, R^2).
     """
     logging.info("Evaluating model")
     dtest = xgb.DMatrix(X_test)
@@ -142,30 +114,39 @@ def evaluate_model(model, X_test, y_test):
     logging.info(f"Evaluation completed. RMSE: {rmse}, R^2: {r2}")
     return {"RMSE": rmse, "R2": r2}
 
-def save_model_to_gcs(model, bucket_name, file_name):
+def save_models_to_gcs(models, bucket_name, file_name):
     """
-    Save a trained model as a pickle file in Google Cloud Storage.
-
-    Args:
-        model: The trained model to save.
-        bucket_name (str): Name of the GCS bucket.
-        file_name (str): Path to save the model in the GCS bucket.
-
-    Returns:
-        None
+    Save all trained models as a single pickle file in Google Cloud Storage.
     """
-    logging.info(f"Saving model to GCS bucket {bucket_name} at {file_name}")
+    logging.info(f"Saving all models to GCS bucket {bucket_name} at {file_name}")
 
     # Initialize the GCS client and bucket
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(file_name)
 
-    # Serialize the model into a pickle object
+    # Serialize the models into a pickle object
     output = io.BytesIO()
-    pickle.dump(model, output)
+    pickle.dump(models, output)
     output.seek(0)
 
     # Upload the pickle object to GCS
     blob.upload_from_file(output, content_type='application/octet-stream')
-    logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")
+    logging.info(f"All models successfully saved to GCS: gs://{bucket_name}/{file_name}")
+
+def load_models_from_gcs(bucket_name, file_name):
+    """
+    Load all models from a pickle file stored in Google Cloud Storage.
+    """
+    logging.info(f"Loading models from GCS bucket {bucket_name} at {file_name}")
+
+    # Initialize the GCS client and bucket
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(file_name)
+
+    # Download and deserialize the pickle file
+    data = blob.download_as_bytes()
+    models = pickle.loads(data)
+    logging.info("Models successfully loaded from GCS")
+    return models
