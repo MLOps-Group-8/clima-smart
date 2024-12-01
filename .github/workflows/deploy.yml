@@ -32,7 +32,13 @@ jobs:
       - name: Copy Files to VM
         run: |
           gcloud compute scp --recurse --zone=us-east1-b \
-          ./* airflow-vm:~/airflow/
+          docker-compose.yaml airflow-vm:~/airflow/
+          gcloud compute scp --recurse --zone=us-east1-b \
+          dags/* airflow-vm:~/airflow/dags/
+          gcloud compute scp --recurse --zone=us-east1-b \
+          scripts/* airflow-vm:~/airflow/scripts/
+          gcloud compute scp --recurse --zone=us-east1-b \
+          requirements.txt airflow-vm:~/airflow/
 
       - name: Deploy to VM
         run: |
