@@ -44,6 +44,10 @@ jobs:
           gcloud compute scp --recurse --zone=us-east1-b \
           docker-compose.yaml airflow-instance:~/airflow/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
+          Dockerfile.airflow airflow-instance:~/airflow/ \
+          && gcloud compute scp --recurse --zone=us-east1-b \
+          Dockerfile.mlflow airflow-instance:~/airflow/ \
+          && gcloud compute scp --recurse --zone=us-east1-b \
           dags/* airflow-instance:~/airflow/dags/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
           scripts/* airflow-instance:~/airflow/scripts/ \
