@@ -44,7 +44,7 @@ dag = DAG('daily_weather_data_pipeline', default_args=default_args,
 def notify_success(context):
     success_email = EmailOperator(
         task_id='success_email',
-        to='darshan.webjaguar@gmail.com',
+        to='keshiarun01@gmail.com',
         subject='Success Notification from Airflow',
         html_content='<p>The task succeeded.</p>',
         dag=context['dag']
@@ -54,7 +54,7 @@ def notify_success(context):
 def notify_failure(context):
     failure_email = EmailOperator(
         task_id='failure_email',
-        to='darshan.webjaguar@gmail.com',
+        to='keshiarun01@gmail.com',
         subject='Failure Notification from Airflow',
         html_content='<p>The task failed.</p>',
         dag=context['dag']
@@ -63,14 +63,14 @@ def notify_failure(context):
 
 
 # Task to fetch and save daily weather data
-def get_weather_data():
+def get_weather_data_daily():
     logging.info("Starting the daily weather data task.")
     client = setup_session()
     params = {
         "latitude": 42.36,
         "longitude": -71.057,
         "timezone": "America/New_York",
-        "start_date": "2000-01-01",
+        "start_date": "2015-01-01",
         "end_date": datetime.now().strftime("%Y-%m-%d"),
         "temperature_unit": "fahrenheit"
     }
@@ -88,7 +88,7 @@ def preprocess_daily_weather_data():
     logging.info("Daily data preprocessing task completed.")
 
 # Task to perform feature engineering
-def perform_feature_engineering():
+def perform_feature_engineering_daily():
     logging.info("Starting the feature engineering task.")
     
     daily_data = read_data_from_gcs(BUCKET_NAME, PREPROCESSED_DAILY_DATA_PATH)
@@ -98,7 +98,7 @@ def perform_feature_engineering():
     save_data_to_gcs(daily_data, BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
     logging.info("Feature engineering task completed.")
 
-def eda_and_visualizations():
+def eda_and_visualizations_daily():
     logging.info("Starting EDA and visualizations.")
     
     daily_data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
@@ -127,7 +127,7 @@ def eda_and_visualizations():
     logging.info("EDA and visualizations completed.")
 
 # Task to generate and save schema and stats
-def save_schema_and_stats(daily_schema, daily_stats):
+def save_schema_and_stats_daily(daily_schema, daily_stats):
     """Save schemas and statistics to GCS for future reference."""
     logging.info("Starting the schema and stats saving task.")
     save_object_to_gcs(BUCKET_NAME, daily_schema, DAILY_SCHEMA_PATH)
@@ -135,7 +135,7 @@ def save_schema_and_stats(daily_schema, daily_stats):
     logging.info("Schema and stats saved to GCS.")
 
 # Task to validate the weather data
-def validate_weather_data():
+def validate_weather_data_daily():
     logging.info("Starting the data validation task.")
     
     daily_data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
@@ -145,7 +145,7 @@ def validate_weather_data():
     logging.info("Data validation task completed.")
 
 # Task to test data quality and schema
-def test_weather_data_quality_and_schema():
+def test_weather_data_quality_and_schema_daily():
     logging.info("Starting the data quality and schema test task.")
     daily_schema = load_object_from_gcs(BUCKET_NAME, DAILY_SCHEMA_PATH)
     
@@ -155,7 +155,7 @@ def test_weather_data_quality_and_schema():
 # Define Airflow tasks
 fetch_and_save_weather_data_task = PythonOperator(
     task_id='fetch_and_save_weather_data',
-    python_callable=get_weather_data,
+    python_callable=get_weather_data_daily,
     on_failure_callback=notify_failure,
     dag=dag
 )
@@ -169,14 +169,14 @@ preprocess_data_task = PythonOperator(
 
 feature_engineering_task = PythonOperator(
     task_id='feature_engineering',
-    python_callable=perform_feature_engineering,
+    python_callable=perform_feature_engineering_daily,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 eda_and_visualizations_task = PythonOperator(
     task_id='eda_and_visualization',
-    python_callable=eda_and_visualizations,
+    python_callable=eda_and_visualizations_daily,
     on_failure_callback=notify_failure,
     dag=dag
 )
@@ -184,7 +184,7 @@ eda_and_visualizations_task = PythonOperator(
 # Updated task for generating and saving schema and stats
 generate_and_save_schema_stats_task = PythonOperator(
     task_id='generate_and_save_schema_stats',
-    python_callable=save_schema_and_stats,
+    python_callable=save_schema_and_stats_daily,
     op_args=['daily_schema.pkl', 'daily_stats.pkl'],
     op_kwargs={
         'bucket_name': BUCKET_NAME,
@@ -197,14 +197,14 @@ generate_and_save_schema_stats_task = PythonOperator(
 # Validation tasks
 validate_data_task = PythonOperator(
     task_id='validate_weather_data',
-    python_callable=validate_weather_data,
+    python_callable=validate_weather_data_daily,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 schema_quality_test_task = PythonOperator(
     task_id='test_data_quality_and_schema',
-    python_callable=test_weather_data_quality_and_schema,
+    python_callable=test_weather_data_quality_and_schema_daily,
     on_failure_callback=notify_failure,
     dag=dag
 )
@@ -212,7 +212,7 @@ schema_quality_test_task = PythonOperator(
 # Email notification task
 email_notification_task = EmailOperator(
     task_id='send_email_notification',
-    to='darshan.webjaguar@gmail.com',
+    to='keshiarun01@gmail.com',
     subject='Daily data collection dag Completed Successfully',
     html_content='<p>Dag Completed</p>',
     dag=dag,
@@ -221,7 +221,7 @@ email_notification_task = EmailOperator(
 # Task to trigger the ModelPipeline DAG
 trigger_model_pipeline_task = TriggerDagRunOperator(
     task_id='trigger_model_development_pipeline_task',
-    trigger_dag_id='daily_weather_model_development_pipeline',
+    trigger_dag_id='daily_weather_model_development_pipeline_v2',
     trigger_rule=TriggerRule.ALL_SUCCESS,  # Ensure this task runs only if all upstream tasks succeed
     dag=dag,
 )

@@ -62,14 +62,14 @@ def notify_failure(context):
     failure_email.execute(context=context)
 
 # Task to fetch and save hourly weather data
-def get_weather_data():
+def get_weather_data_hourly():
     logging.info("Starting the hourly weather data task.")
     client = setup_session()
     params = {
         "latitude": 42.36,
         "longitude": -71.057,
         "timezone": "America/New_York",
-        "start_date": "2020-01-01",
+        "start_date": "2022-01-01",
         "end_date": datetime.now().strftime("%Y-%m-%d"),
         "temperature_unit": "fahrenheit"
     }
@@ -79,7 +79,7 @@ def get_weather_data():
     logging.info("Hourly weather data task completed.")
 
 # Task to preprocess hourly data
-def preprocess_weather_data():
+def preprocess_weather_data_hourly():
     logging.info("Starting the hourly data preprocessing task.")
     hourly_data = read_data_from_gcs(BUCKET_NAME, HOURLY_DATA_PATH)
     df = preprocess_hourly_data(hourly_data)
@@ -87,7 +87,7 @@ def preprocess_weather_data():
     logging.info("Hourly data preprocessing task completed.")
 
 # Task to perform feature engineering
-def perform_feature_engineering():
+def perform_feature_engineering_hourly():
     logging.info("Starting the feature engineering task.")
     
     hourly_data = read_data_from_gcs(BUCKET_NAME, PREPROCESSED_HOURLY_DATA_PATH)
@@ -97,7 +97,7 @@ def perform_feature_engineering():
     save_data_to_gcs(hourly_data, BUCKET_NAME, ENGINEERED_HOURLY_DATA_PATH)
     logging.info("Feature engineering task completed.")
 
-def eda_and_visualizations():
+def eda_and_visualizations_hourly():
     logging.info("Starting EDA and visualizations.")
     
     hourly_data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_HOURLY_DATA_PATH)
@@ -123,7 +123,7 @@ def eda_and_visualizations():
     logging.info("EDA and visualizations completed.")
 
 # Task to generate and save schema and stats
-def save_schema_and_stats(hourly_schema, hourly_stats):
+def save_schema_and_stats_hourly(hourly_schema, hourly_stats):
     """Save schemas and statistics to GCS for future reference."""
     logging.info("Starting the schema and stats saving task.")
     save_object_to_gcs(BUCKET_NAME, hourly_schema, HOURLY_SCHEMA_PATH)
@@ -131,7 +131,7 @@ def save_schema_and_stats(hourly_schema, hourly_stats):
     logging.info("Schema and stats saved to GCS.")
 
 # Task to validate the weather data
-def validate_weather_data():
+def validate_weather_data_hourly():
     logging.info("Starting the data validation task.")
     
     hourly_data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_HOURLY_DATA_PATH)
@@ -140,7 +140,7 @@ def validate_weather_data():
     logging.info("Data validation task completed.")
 
 # Task to test data quality and schema
-def test_weather_data_quality_and_schema():
+def test_weather_data_quality_and_schema_hourly():
     logging.info("Starting the data quality and schema test task.")
     hourly_schema = load_object_from_gcs(BUCKET_NAME, HOURLY_SCHEMA_PATH)
     test_hourly_data_quality_and_schema(hourly_schema)
@@ -149,28 +149,28 @@ def test_weather_data_quality_and_schema():
 # Define Airflow tasks
 fetch_and_save_weather_data_task = PythonOperator(
     task_id='fetch_and_save_weather_data',
-    python_callable=get_weather_data,
+    python_callable=get_weather_data_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 preprocess_data_task = PythonOperator(
     task_id='preprocess_weather_data',
-    python_callable=preprocess_weather_data,
+    python_callable=preprocess_weather_data_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 feature_engineering_task = PythonOperator(
     task_id='feature_engineering',
-    python_callable=perform_feature_engineering,
+    python_callable=perform_feature_engineering_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 eda_and_visualizations_task = PythonOperator(
     task_id='eda_and_visualization',
-    python_callable=eda_and_visualizations,
+    python_callable=eda_and_visualizations_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
@@ -179,7 +179,7 @@ eda_and_visualizations_task = PythonOperator(
 # Updated task for generating and saving schema and stats
 generate_and_save_schema_stats_task = PythonOperator(
     task_id='generate_and_save_schema_stats',
-    python_callable=save_schema_and_stats,
+    python_callable=save_schema_and_stats_hourly,
     op_args=['hourly_schema.pkl','hourly_stats.pkl'],
     op_kwargs={
         'bucket_name': BUCKET_NAME,
@@ -192,14 +192,14 @@ generate_and_save_schema_stats_task = PythonOperator(
 # Validation tasks
 validate_data_task = PythonOperator(
     task_id='validate_weather_data',
-    python_callable=validate_weather_data,
+    python_callable=validate_weather_data_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
 
 schema_quality_test_task = PythonOperator(
     task_id='test_data_quality_and_schema',
-    python_callable=test_weather_data_quality_and_schema,
+    python_callable=test_weather_data_quality_and_schema_hourly,
     on_failure_callback=notify_failure,
     dag=dag
 )
@@ -207,7 +207,7 @@ schema_quality_test_task = PythonOperator(
 # Email notification task
 email_notification_task = EmailOperator(
     task_id='send_email_notification',
-    to='darshan.webjaguar@gmail.com',
+    to='keshiarun01@gmail.com',
     subject='Hourly data collection dag Completed Successfully',
     html_content='<p>Dag Completed</p>',
     dag=dag,
@@ -216,7 +216,7 @@ email_notification_task = EmailOperator(
 # Task to trigger the ModelPipeline DAG
 trigger_model_pipeline_task = TriggerDagRunOperator(
     task_id='trigger_model_development_pipeline_task',
-    trigger_dag_id='hourly_weather_model_development_pipeline',
+    trigger_dag_id='hourly_weather_model_development_pipeline_v2',
     trigger_rule=TriggerRule.ALL_SUCCESS,  # Ensure this task runs only if all upstream tasks succeed
     dag=dag,
 )
