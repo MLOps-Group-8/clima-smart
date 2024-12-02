@@ -6,12 +6,15 @@ set -e
 # Airflow home directory
 AIRFLOW_HOME=~/airflow
 
+# Source path of Google Cloud credentials
+SOURCE_GCLOUD_CREDENTIALS="/home/shah_darsha/gcp/key.json"
+
+# Destination path for Google Cloud credentials
+DEST_GCLOUD_CREDENTIALS="$AIRFLOW_HOME/config/key.json"
+
 # Health check retries and wait time
 HEALTH_CHECK_RETRIES=5
 HEALTH_CHECK_WAIT_TIME=10
-
-# Google Cloud credentials path
-GCLOUD_CREDENTIALS_PATH="$AIRFLOW_HOME/config/key.json"
 
 # Function to check if containers are healthy
 check_containers_health() {
@@ -31,12 +34,12 @@ check_containers_health() {
 
 # Copy Google Cloud credentials
 echo "Setting up Google Cloud credentials..."
-if [ -f "./key.json" ]; then
-    mkdir -p "$AIRFLOW_HOME/config"
-    cp ./key.json "$GCLOUD_CREDENTIALS_PATH"
-    echo "Google Cloud credentials copied to $GCLOUD_CREDENTIALS_PATH"
+if [ -f "$SOURCE_GCLOUD_CREDENTIALS" ]; then
+    mkdir -p "$(dirname "$DEST_GCLOUD_CREDENTIALS")"
+    cp "$SOURCE_GCLOUD_CREDENTIALS" "$DEST_GCLOUD_CREDENTIALS"
+    echo "Google Cloud credentials copied to $DEST_GCLOUD_CREDENTIALS"
 else
-    echo "Google Cloud credentials (key.json) not found in the current directory. Exiting."
+    echo "Google Cloud credentials not found at $SOURCE_GCLOUD_CREDENTIALS. Exiting."
     exit 1
 fi
 
