@@ -9,12 +9,12 @@ import json
 import os
 import pickle
 from utils import save_model_to_gcs, read_data_from_gcs
-from hourlymodeltraining import (
+from hourly_model_training import (
     process_data,
     run_model_training,
 )
-from hourlybiasdetection import run_bias_detection_workflow, plot_bias_metrics
-from hourlymodelsensitivity import perform_feature_importance_analysis, perform_hyperparameter_sensitivity_analysis
+from hourly_bias_detection import run_bias_detection_workflow, plot_bias_metrics
+from hourly_model_sensitivity import perform_feature_importance_analysis, perform_hyperparameter_sensitivity_analysis
 from constants import *
 
 # Configure logging
@@ -77,7 +77,7 @@ targets = ['snowfall', 'rain', 'apparent_temperature']
 # Define the tasks and their functionality
 
 # Task to load data from GCS
-def load_data_task(**kwargs):
+def hourly_load_data_task(**kwargs):
     logging.info("Loading data from GCS")
     data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_HOURLY_DATA_PATH)
     data_path = os.path.join(TEMP_DIR, "engineered_data.pkl")
@@ -93,7 +93,7 @@ def load_data_task(**kwargs):
     logging.info("Data loading task completed.")
 
 # Task to process data
-def process_data_task(**kwargs):
+def hourly_process_data_task(**kwargs):
     logging.info("Processing data")
 
     raw_data_path = kwargs['ti'].xcom_pull(key='engineered_data_path', task_ids='load_data')
@@ -122,7 +122,7 @@ def process_data_task(**kwargs):
     # Remove handling of target scalers entirely
     logging.info("Data processing task completed.")
 
-def train_model_task(**kwargs):
+def hourly_train_model_task(**kwargs):
     logging.info("Starting model training with hyperparameter optimization for hourly data")
 
     # Retrieve the data path from XCom
@@ -146,7 +146,7 @@ def train_model_task(**kwargs):
     kwargs['ti'].xcom_push(key='models_file_path', value=models_file_path)
     logging.info(f"Model training task completed successfully. Models saved at {models_file_path}")
 
-def bias_detection_task(**kwargs):
+def hourly_bias_detection_task(**kwargs):
     logging.info("Starting bias detection for hourly data")
 
     # Load processed data path
@@ -200,7 +200,7 @@ def bias_detection_task(**kwargs):
 
     logging.info("Bias detection task completed successfully.")
 
-def model_sensitivity_task(bucket_name=BUCKET_NAME, **kwargs):
+def hourly_model_sensitivity_task(bucket_name=BUCKET_NAME, **kwargs):
     logging.info("Performing model sensitivity analysis for hourly data")
 
     targets = ['snowfall', 'rain', 'apparent_temperature']
@@ -268,12 +268,13 @@ def save_models_to_gcs_task(**kwargs):
     best_model_paths = kwargs['ti'].xcom_pull(key='models_file_path', task_ids='train_model')
 
     # Define the GCS path for the model
-    gcs_path = f"assets/hourly_models/best_model.pkl"
+    gcs_path = f"assets/hourly_models/hourly_best_model.pkl"
 
     # Save the model to GCS
     save_model_to_gcs(
     model=best_model_paths,
-    bucket_name=BUCKET_NAME
+    bucket_name=BUCKET_NAME,
+    file_name= "hourly_best_model"
     )
     logging.info(f"Best mode saved to GCS at {gcs_path}")
 
@@ -283,7 +284,7 @@ def save_models_to_gcs_task(**kwargs):
 # Task dependencies
 load_data_operator = PythonOperator(
     task_id='load_data',
-    python_callable=load_data_task,
+    python_callable=hourly_load_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -291,7 +292,7 @@ load_data_operator = PythonOperator(
 
 process_data_operator = PythonOperator(
     task_id='process_data',
-    python_callable=process_data_task,
+    python_callable=hourly_process_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -299,7 +300,7 @@ process_data_operator = PythonOperator(
 
 train_model_operator = PythonOperator(
     task_id='train_model',
-    python_callable=train_model_task,
+    python_callable=hourly_train_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     execution_timeout=timedelta(minutes=10),
@@ -308,7 +309,7 @@ train_model_operator = PythonOperator(
 
 bias_detection_operator = PythonOperator(
     task_id='bias_detection',
-    python_callable=bias_detection_task,
+    python_callable=hourly_bias_detection_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -317,7 +318,7 @@ bias_detection_operator = PythonOperator(
 # Define the task in the DAG
 model_sensitivity_operator = PythonOperator(
     task_id='model_sensitivity',
-    python_callable=model_sensitivity_task,
+    python_callable=hourly_model_sensitivity_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -341,3 +342,4 @@ email_notification_task = EmailOperator(
 
 # Set task dependencies
 load_data_operator >> process_data_operator >> train_model_operator >> bias_detection_operator >> model_sensitivity_operator >> save_best_model_operator >> email_notification_task
+
