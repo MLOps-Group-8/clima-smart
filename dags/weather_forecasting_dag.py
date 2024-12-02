@@ -50,4 +50,4 @@ email_notification_task = EmailOperator(
 )
 
 # Set task dependencies
-start_task >> [daily_weather_data_forecasting_trigger_task, hourly_weather_data_forecasting_trigger_task] >> email_notification_task
+start_task >> daily_weather_data_forecasting_trigger_task >> hourly_weather_data_forecasting_trigger_task >> email_notification_task

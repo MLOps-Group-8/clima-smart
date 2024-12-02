@@ -91,11 +91,11 @@ fi
 
 # Start Airflow services
 echo "Starting Airflow services..."
-sudo docker compose up -d
+sudo docker compose up
 
 # Allow some time for containers to stabilize
 echo "Waiting for containers to stabilize..."
-sleep 30
+sleep 100
 
 # Perform health check
 if ! check_containers_health; then
