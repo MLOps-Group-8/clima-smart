@@ -95,7 +95,7 @@ fi
 
 # Start Airflow services
 echo "Starting Airflow services..."
-sudo docker compose up
+sudo docker compose up -d
 
 # Allow some time for containers to stabilize
 echo "Waiting for containers to stabilize..."

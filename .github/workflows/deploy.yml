@@ -3,7 +3,7 @@ name: Deploy Airflow to GCP VM
 on:
   push:
     branches:
-      - model-deployment-ds
+      - main
 
 jobs:
   deploy:
