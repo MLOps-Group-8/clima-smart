@@ -4,7 +4,7 @@
 set -e
 
 # Airflow home directory
-AIRFLOW_HOME=~/airflow
+AIRFLOW_HOME=~/clima-smart
 
 # Health check retries and wait time
 HEALTH_CHECK_RETRIES=5
@@ -27,16 +27,36 @@ check_containers_health() {
     return 1
 }
 
-# Stop existing services
-echo "Stopping existing services if running..."
+# Check if containers are already running
 if sudo docker compose ps | grep -q "Up"; then
-    echo "Services are running. Stopping them now..."
-    sudo docker compose down || {
-        echo "Failed to stop running containers. Exiting."
-        exit 1
-    }
-else
-    echo "No running services found."
+    echo "Containers are already running. Updating DAGs..."
+
+    # Remove old DAGs inside the containers
+    echo "Removing old DAGs from the containers..."
+    sudo docker exec -it airflow-webserver bash -c "rm -rf /opt/airflow/dags/*"
+    sudo docker exec -it airflow-scheduler bash -c "rm -rf /opt/airflow/dags/*"
+
+    # Copy updated DAGs into the containers
+    echo "Copying updated DAGs into the containers..."
+    sudo docker cp dags/. airflow-webserver:/opt/airflow/dags/
+    sudo docker cp dags/. airflow-scheduler:/opt/airflow/dags/
+
+    # Restart Airflow services to pick up changes
+    echo "Restarting Airflow services to apply changes..."
+    sudo docker compose restart webserver scheduler
+
+    # Trigger DAGs via REST API
+    echo "Triggering DAGs via REST API..."
+    for dag in $(ls dags/*.py | xargs -n 1 basename | sed 's/.py//'); do
+        echo "Triggering DAG: $dag"
+        curl -X POST "http://localhost:8080/api/v1/dags/$dag/dagRuns" \
+             -H "Content-Type: application/json" \
+             --user "airflow:airflow" \
+             -d '{"conf": {}}'
+    done
+
+    echo "DAGs updated and triggered successfully."
+    exit 0
 fi
 
 # Clean up unused Docker resources
