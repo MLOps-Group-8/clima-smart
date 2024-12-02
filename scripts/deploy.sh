@@ -27,37 +27,37 @@ check_containers_health() {
     return 1
 }
 
-# Check if containers are already running
-if sudo docker compose ps | grep -q "Up"; then
-    echo "Containers are already running. Updating DAGs..."
+# # Check if containers are already running
+# if sudo docker compose ps | grep -q "Up"; then
+#     echo "Containers are already running. Updating DAGs..."
 
-    # Remove old DAGs inside the containers
-    echo "Removing old DAGs from the containers..."
-    sudo docker exec -it airflow-webserver bash -c "rm -rf /opt/airflow/dags/*"
-    sudo docker exec -it airflow-scheduler bash -c "rm -rf /opt/airflow/dags/*"
+#     # Remove old DAGs inside the containers
+#     echo "Removing old DAGs from the containers..."
+#     sudo docker exec -it airflow-webserver bash -c "rm -rf /opt/airflow/dags/*"
+#     sudo docker exec -it airflow-scheduler bash -c "rm -rf /opt/airflow/dags/*"
 
-    # Copy updated DAGs into the containers
-    echo "Copying updated DAGs into the containers..."
-    sudo docker cp dags/. airflow-webserver:/opt/airflow/dags/
-    sudo docker cp dags/. airflow-scheduler:/opt/airflow/dags/
+#     # Copy updated DAGs into the containers
+#     echo "Copying updated DAGs into the containers..."
+#     sudo docker cp dags/. airflow-webserver:/opt/airflow/dags/
+#     sudo docker cp dags/. airflow-scheduler:/opt/airflow/dags/
 
-    # Restart Airflow services to pick up changes
-    echo "Restarting Airflow services to apply changes..."
-    sudo docker compose restart webserver scheduler
+#     # Restart Airflow services to pick up changes
+#     echo "Restarting Airflow services to apply changes..."
+#     sudo docker compose restart webserver scheduler
 
-    # Trigger DAGs via REST API
-    echo "Triggering DAGs via REST API..."
-    for dag in $(ls dags/*.py | xargs -n 1 basename | sed 's/.py//'); do
-        echo "Triggering DAG: $dag"
-        curl -X POST "http://localhost:8080/api/v1/dags/$dag/dagRuns" \
-             -H "Content-Type: application/json" \
-             --user "airflow:airflow" \
-             -d '{"conf": {}}'
-    done
+#     # Trigger DAGs via REST API
+#     echo "Triggering DAGs via REST API..."
+#     for dag in $(ls dags/*.py | xargs -n 1 basename | sed 's/.py//'); do
+#         echo "Triggering DAG: $dag"
+#         curl -X POST "http://localhost:8080/api/v1/dags/$dag/dagRuns" \
+#              -H "Content-Type: application/json" \
+#              --user "airflow:airflow" \
+#              -d '{"conf": {}}'
+#     done
 
-    echo "DAGs updated and triggered successfully."
-    exit 0
-fi
+#     echo "DAGs updated and triggered successfully."
+#     exit 0
+# fi
 
 # Copy Google Cloud credentials
 echo "Setting up Google Cloud credentials..."
@@ -72,6 +72,10 @@ else
     echo "Google Cloud credentials not found at $SOURCE_GCLOUD_CREDENTIALS. Exiting."
     exit 1
 fi
+
+# Clean up unused Docker resources
+echo "Pruning unused Docker resources..."
+sudo docker system prune -af --volumes
 
 # Build Airflow containers
 echo "Building Airflow containers..."
