@@ -37,24 +37,24 @@ jobs:
       - name: Create Directories on VM
         run: |
           gcloud compute ssh airflow-instance --zone=us-east1-b --command "
-          mkdir -p ~/airflow/dags ~/airflow/scripts"
+          mkdir -p ~/clima-smart/dags ~/clima-smart/scripts"
 
       - name: Copy Files to VM
         run: |
           gcloud compute scp --recurse --zone=us-east1-b \
-          docker-compose.yaml airflow-instance:~/airflow/ \
+          docker-compose.yaml airflow-instance:~/clima-smart/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.airflow airflow-instance:~/airflow/ \
+          Dockerfile.airflow airflow-instance:~/clima-smart/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.mlflow airflow-instance:~/airflow/ \
+          Dockerfile.mlflow airflow-instance:~/clima-smart/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
-          dags/* airflow-instance:~/airflow/dags/ \
+          dags/* airflow-instance:~/clima-smart/dags/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
-          scripts/* airflow-instance:~/airflow/scripts/ \
+          scripts/* airflow-instance:~/clima-smart/scripts/ \
           && gcloud compute scp --recurse --zone=us-east1-b \
-          requirements.txt airflow-instance:~/airflow/
+          requirements.txt airflow-instance:~/clima-smart/
 
       - name: Deploy to VM
         run: |
           gcloud compute ssh airflow-instance --zone=us-east1-b --command "
-          cd ~/airflow && bash ./scripts/deploy.sh"
+          cd ~/clima-smart && bash ./scripts/deploy.sh"
