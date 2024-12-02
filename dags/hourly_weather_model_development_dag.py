@@ -342,4 +342,3 @@ email_notification_task = EmailOperator(
 
 # Set task dependencies
 load_data_operator >> process_data_operator >> train_model_operator >> bias_detection_operator >> model_sensitivity_operator >> save_best_model_operator >> email_notification_task
-
