@@ -41,18 +41,7 @@ jobs:
 
       - name: Copy Files to VM
         run: |
-          gcloud compute scp --recurse --zone=us-east1-b \
-          docker-compose.yaml airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.airflow airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.mlflow airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          dags/* airflow-instance:~/clima-smart/dags/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          scripts/* airflow-instance:~/clima-smart/scripts/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          requirements.txt airflow-instance:~/clima-smart/
+          gcloud compute scp --recurse --zone=us-east1-b ./ airflow-instance:~/clima-smart/ 
 
       - name: Deploy to VM
         run: |

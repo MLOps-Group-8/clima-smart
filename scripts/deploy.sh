@@ -59,10 +59,6 @@ if sudo docker compose ps | grep -q "Up"; then
     exit 0
 fi
 
-# Clean up unused Docker resources
-echo "Pruning unused Docker resources..."
-sudo docker system prune -af --volumes
-
 # Copy Google Cloud credentials
 echo "Setting up Google Cloud credentials..."
 SOURCE_GCLOUD_CREDENTIALS="/home/shah_darsha/gcp/key.json"
@@ -79,7 +75,7 @@ fi
 
 # Build Airflow containers
 echo "Building Airflow containers..."
-sudo docker compose build --no-cache
+sudo docker compose build
 
 # Initialize Airflow database only if needed
 if [ ! -f "$AIRFLOW_DB_INITIALIZED_FLAG" ]; then
