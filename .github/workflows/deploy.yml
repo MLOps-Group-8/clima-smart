@@ -1,4 +1,5 @@
 name: Deploy Airflow to GCP VM
+
 on:
   push:
     branches:
@@ -29,19 +30,27 @@ jobs:
       - name: Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Verify SSH Access to VM
+        run: |
+          gcloud compute ssh airflow-instance --zone=us-east1-b --command "echo 'SSH Connection Successful'"
+
+      - name: Create Directories on VM
+        run: |
+          gcloud compute ssh airflow-instance --zone=us-east1-b --command "
+          mkdir -p ~/airflow/dags ~/airflow/scripts"
+
       - name: Copy Files to VM
         run: |
           gcloud compute scp --recurse --zone=us-east1-b \
-          docker-compose.yaml airflow-vm:~/airflow/
-          gcloud compute scp --recurse --zone=us-east1-b \
-          dags/* airflow-vm:~/airflow/dags/
-          gcloud compute scp --recurse --zone=us-east1-b \
-          scripts/* airflow-vm:~/airflow/scripts/
-          gcloud compute scp --recurse --zone=us-east1-b \
-          requirements.txt airflow-vm:~/airflow/
+          docker-compose.yaml airflow-instance:~/airflow/ \
+          && gcloud compute scp --recurse --zone=us-east1-b \
+          dags/* airflow-instance:~/airflow/dags/ \
+          && gcloud compute scp --recurse --zone=us-east1-b \
+          scripts/* airflow-instance:~/airflow/scripts/ \
+          && gcloud compute scp --recurse --zone=us-east1-b \
+          requirements.txt airflow-instance:~/airflow/
 
       - name: Deploy to VM
         run: |
-          gcloud compute ssh airflow-vm --zone=us-east1-b --command '
-          cd ~/airflow && bash ./scripts/deploy.sh
-          '
+          gcloud compute ssh airflow-instance --zone=us-east1-b --command "
+          cd ~/airflow && bash ./scripts/deploy.sh"
