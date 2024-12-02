@@ -38,6 +38,7 @@ jobs:
         run: |
           gcloud compute ssh airflow-instance --zone=us-east1-b --command "
           mkdir -p ~/clima-smart/dags ~/clima-smart/scripts ~/clima-smart/logs ~/clima-smart/plugins"
+          chmod -R 777 ~/clima-smart/dags ~/clima-smart/scripts ~/clima-smart/logs ~/clima-smart/plugins"
 
       - name: Copy Files to VM
         run: |
