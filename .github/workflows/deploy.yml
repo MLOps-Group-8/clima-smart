@@ -3,24 +3,23 @@ name: Deploy Airflow to GCP VM
 on:
   push:
     branches:
-      - main
+      - model-deployment-ds
 
 jobs:
   deploy:
     name: Build and Deploy to GCP VM
     runs-on: ubuntu-latest
     steps:
-      - name: Credentials verification
-        shell: bash
+      - name: Setup Environment Variables
+        id: vars
         env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_ZONE: us-east1-b
         run: |
-          echo "Service Account Key: $GCP_SA_KEY"
-          echo "Project ID: $GCP_PROJECT_ID"
-
-      - name: Checkout Code
-        uses: actions/checkout@v3
+          # Generate a unique name for the new VM
+          NEW_VM_NAME="airflow-$(date +%Y%m%d%H%M%S)"
+          echo "NEW_VM_NAME=$NEW_VM_NAME" >> $GITHUB_ENV
+          echo "NEW_VM_NAME=$NEW_VM_NAME" # Pass to other steps
+          echo "::set-output name=new_vm_name::$NEW_VM_NAME"
 
       - name: Configure GCloud Auth
         uses: google-github-actions/auth@v1
@@ -30,33 +29,105 @@ jobs:
       - name: Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Verify SSH Access to VM
+      - name: Create New VM
         run: |
-          gcloud compute ssh airflow-instance --zone=us-east1-b --command "echo 'SSH Connection Successful'"
-
-      - name: Create Directories on VM
+          gcloud config set compute/zone $GCP_ZONE
+          gcloud compute instances create ${{ env.NEW_VM_NAME }} \
+            --machine-type=e2-standard-2 \
+            --boot-disk-size=50GB \
+            --boot-disk-type=pd-standard \
+            --image-family=ubuntu-2004-lts \
+            --image-project=ubuntu-os-cloud \
+            --tags=http-server \
+            --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/logging.write
+	  
+	    - name: Enable Cloud Monitoring on New VM
         run: |
-          gcloud compute ssh airflow-instance --zone=us-east1-b --command "
-          sudo mkdir -p ~/clima-smart/dags ~/clima-smart/scripts ~/clima-smart/logs ~/clima-smart/plugins &&
-          sudo chmod -R 777 ~/clima-smart/dags ~/clima-smart/scripts ~/clima-smart/logs ~/clima-smart/plugins"
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+            curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh &&
+            sudo bash add-monitoring-agent-repo.sh &&
+            sudo apt-get update &&
+            sudo apt-get install -y stackdriver-agent &&
+            sudo service stackdriver-agent start
+          "
 
-
-      - name: Copy Files to VM
+      - name: Configure Firewall Rules
         run: |
-          gcloud compute scp --recurse --zone=us-east1-b \
-          docker-compose.yaml airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.airflow airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          Dockerfile.mlflow airflow-instance:~/clima-smart/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          dags/* airflow-instance:~/clima-smart/dags/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          scripts/* airflow-instance:~/clima-smart/scripts/ \
-          && gcloud compute scp --recurse --zone=us-east1-b \
-          requirements.txt airflow-instance:~/clima-smart/
+          # Allow Airflow web server traffic
+          gcloud compute firewall-rules create allow-airflow \
+            --allow tcp:8080 \
+            --description="Allow incoming traffic on TCP port 8080" \
+            --direction=INGRESS \
+            --target-tags=http-server || echo "Airflow firewall rule already exists"
 
-      - name: Deploy to VM
+          # Allow Mlflow server traffic
+          gcloud compute firewall-rules create allow-mlflow \
+            --allow tcp:5000 \
+            --description="Allow incoming traffic on TCP port 5000" \
+            --direction=INGRESS \
+            --target-tags=http-server || echo "Mlflow firewall rule already exists"
+
+      - name: Install Docker and Deploy Code on New VM
         run: |
-          gcloud compute ssh airflow-instance --zone=us-east1-b --command "
-          cd ~/clima-smart && bash ./scripts/deploy.sh"
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+            # Update and install prerequisites
+            sudo apt-get update &&
+            sudo apt-get install -y ca-certificates curl &&
+            
+            # Add Docker's official GPG key
+            sudo install -m 0755 -d /etc/apt/keyrings &&
+            sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc &&
+            sudo chmod a+r /etc/apt/keyrings/docker.asc &&
+
+            # Add Docker's official repository
+            echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo '\$VERSION_CODENAME') stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null &&
+            
+            # Update and install Docker
+            sudo apt-get update &&
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io &&
+
+            # Enable and start Docker service
+            sudo systemctl start docker &&
+            sudo systemctl enable docker &&
+            
+            # Clone the repository
+            git clone https://github.com/MLOps-Group-8/clima-smart.git &&
+            cd clima-smart &&
+
+            # Set permissions for scripts and other required files
+            chmod -R 755 ./scripts &&
+            chmod -R 755 ./dags &&
+            chmod -R 755 ./logs &&
+            chmod -R 755 ./plugins &&
+            chmod -R 755 ./config
+
+            # Download key.json from Google Cloud Storage and move to config folder
+            gsutil cp gs://clima-smart-secrets/key.json ./config/key.json &&
+            
+            # Verify key.json file is in the correct location
+            ls -l ./config/key.json || echo 'key.json not found' &&
+            
+            # Build and deploy using Docker Compose
+            docker compose build &&
+            docker compose up airflow-init &&
+            docker compose up -d
+          "
+
+
+      - name: Verify Deployment
+        run: |
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+            curl -I http://localhost:8080 || echo 'Deployment verification failed'
+          "
+
+      - name: Delete Previous VM
+        if: success()
+        env:
+          GCP_ZONE: us-east1-b
+        run: |
+          OLD_VM_NAME=$(gcloud compute instances list --filter="name ~ '^airflow-' AND name!='$NEW_VM_NAME'" --format="value(name)" | head -n 1)
+          if [ -n "$OLD_VM_NAME" ]; then
+            gcloud compute instances delete $OLD_VM_NAME --zone=$GCP_ZONE --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
+          else
+            echo "No previous VM found to delete."
+          "
