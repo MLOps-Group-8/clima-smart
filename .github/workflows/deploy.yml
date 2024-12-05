@@ -31,7 +31,7 @@ jobs:
 
       - name: Create New VM
         run: |
-          gcloud config set compute/zone ${{ env.GCP_ZONE }}
+          gcloud config set compute/zone us-east1-b
           gcloud compute instances create ${{ env.NEW_VM_NAME }} \
             --machine-type=e2-standard-2 \
             --boot-disk-size=50GB \
@@ -43,7 +43,7 @@ jobs:
 
       - name: Enable Cloud Monitoring on New VM
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
             curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh &&
             sudo bash add-monitoring-agent-repo.sh &&
             sudo apt-get update &&
@@ -67,7 +67,7 @@ jobs:
 
       - name: Run Deployment Commands on VM
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
             # Install Docker
             curl -fsSL https://get.docker.com -o get-docker.sh &&
             sudo sh get-docker.sh &&
@@ -95,7 +95,7 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
             curl -I http://localhost:8080 || echo 'Deployment verification failed'
           "
 
@@ -106,7 +106,7 @@ jobs:
         run: |
           OLD_VM_NAME=$(gcloud compute instances list --filter="name ~ '^airflow-' AND name!='$NEW_VM_NAME'" --format="value(name)" | head -n 1)
           if [ -n "$OLD_VM_NAME" ]; then
-            gcloud compute instances delete $OLD_VM_NAME --zone=$GCP_ZONE --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
+            gcloud compute instances delete $OLD_VM_NAME --zone=us-east1-b --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
           else
             echo "No previous VM found to delete."
           "
