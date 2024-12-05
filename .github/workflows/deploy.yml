@@ -40,8 +40,8 @@ jobs:
             --image-project=ubuntu-os-cloud \
             --tags=http-server \
             --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/logging.write
-	  
-	    - name: Enable Cloud Monitoring on New VM
+
+      - name: Enable Cloud Monitoring on New VM
         run: |
           gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
             curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh &&
@@ -112,7 +112,6 @@ jobs:
             docker compose up airflow-init &&
             docker compose up -d
           "
-
 
       - name: Verify Deployment
         run: |
