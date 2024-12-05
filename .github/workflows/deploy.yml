@@ -78,9 +78,9 @@ jobs:
             git clone https://github.com/MLOps-Group-8/clima-smart.git &&
             cd clima-smart &&
 
-            # Set permissions
+            # Set permissions (777 all can read/write/execute vs 755 only owner can write/execute)
             sudo mkdir -p ./plugins ./config &&
-            sudo chmod -R 755 ./scripts ./dags ./logs ./plugins ./config &&
+            sudo chmod -R 777 ./scripts ./dags ./logs ./plugins ./config &&
 
             # Download key.json from GCS
             gsutil cp gs://clima-smart-secrets/key.json ./config/key.json &&
@@ -102,12 +102,11 @@ jobs:
 
       - name: Delete Previous VM
         if: success()
-        env:
-          GCP_ZONE: us-east1-b
         run: |
           OLD_VM_NAME=$(gcloud compute instances list --filter="name ~ '^airflow-' AND name!='$NEW_VM_NAME'" --format="value(name)" | head -n 1)
           if [ -n "$OLD_VM_NAME" ]; then
-            gcloud compute instances delete $OLD_VM_NAME --zone=us-east1-b --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
+            gcloud compute instances delete "$OLD_VM_NAME" --zone=us-east1-b --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
           else
             echo "No previous VM found to delete."
-          "
+          fi
+
