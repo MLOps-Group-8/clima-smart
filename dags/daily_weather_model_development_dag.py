@@ -5,16 +5,16 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import logging
-import json
+import json 
 import os
 import pickle
 from utils import save_model_to_gcs, read_data_from_gcs
-from hourly_model_training import (
+from daily_model_training import (
     process_data,
     run_model_training,
 )
-from hourly_bias_detection import run_bias_detection_workflow, plot_bias_metrics
-from hourly_model_sensitivity import perform_feature_importance_analysis, perform_hyperparameter_sensitivity_analysis
+from daily_model_bias_detection import run_bias_detection_workflow, plot_bias_metrics
+from daily_model_sensitivity import perform_feature_importance_analysis, perform_hyperparameter_sensitivity_analysis
 from constants import *
 
 # Configure logging
@@ -33,16 +33,16 @@ default_args = {
 
 # Define the DAG
 dag3 = DAG(
-    'hourly_weather_model_development_pipeline_v2',
+    'daily_weather_model_development_pipeline_v2',
     default_args=default_args,
-    description='DAG for running the model development pipeline on hourly weather data',
+    description='DAG for running the model development pipeline on daily weather data',
     schedule_interval=None,
     catchup=False,
     is_paused_upon_creation=False
 )
 
 # Temporary directory for saving data and models
-TEMP_DIR = "/tmp/airflow_hourly_model_pipeline"
+TEMP_DIR = "/tmp/airflow_daily_model_pipeline"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # Email notification functions
@@ -66,20 +66,10 @@ def notify_failure(context):
     )
     failure_email.execute(context=context)
 
-# Replace with your hourly data features and targets
-features = [
-    'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
-    'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
-    'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
-]
-targets = ['snowfall', 'rain', 'apparent_temperature']
-
-# Define the tasks and their functionality
-
 # Task to load data from GCS
-def hourly_load_data_task(**kwargs):
+def daily_load_data_task(**kwargs):
     logging.info("Loading data from GCS")
-    data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_HOURLY_DATA_PATH)
+    data = read_data_from_gcs(BUCKET_NAME, ENGINEERED_DAILY_DATA_PATH)
     data_path = os.path.join(TEMP_DIR, "engineered_data.pkl")
 
     logging.info(f"Saving loaded data to {data_path}")
@@ -93,13 +83,21 @@ def hourly_load_data_task(**kwargs):
     logging.info("Data loading task completed.")
 
 # Task to process data
-def hourly_process_data_task(**kwargs):
+def daily_process_data_task(**kwargs):
     logging.info("Processing data")
 
     raw_data_path = kwargs['ti'].xcom_pull(key='engineered_data_path', task_ids='load_data')
     with open(raw_data_path, "rb") as f:
         raw_data = pickle.load(f)
 
+    features = [
+        'temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 'rain_sum',
+        'showers_sum', 'daylight_duration', 'precipitation_sum', 'temperature_range',
+        'diurnal_temp_range', 'precipitation_intensity'
+    ]
+    targets = ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']
+
+    # Remove scalers from process_data function
     processed_data, scaler_features, _ = process_data(raw_data, features, targets)
 
     for target, splits in processed_data.items():
@@ -107,6 +105,7 @@ def hourly_process_data_task(**kwargs):
             split_path = os.path.join(TEMP_DIR, f"{target}_{split}.pkl")
             with open(split_path, "wb") as f:
                 pickle.dump(data_split, f)
+
             # Log feature information
             if isinstance(data_split, np.ndarray):
                 logging.info(f"Saving processed data for {target} - {split}: {data_split.shape}")
@@ -121,9 +120,9 @@ def hourly_process_data_task(**kwargs):
 
     # Remove handling of target scalers entirely
     logging.info("Data processing task completed.")
-
-def hourly_train_model_task(**kwargs):
-    logging.info("Starting model training with hyperparameter optimization for hourly data")
+    
+def daily_train_model_task(**kwargs):
+    logging.info("Starting model training with hyperparameter optimization")
 
     # Retrieve the data path from XCom
     data_path = kwargs['ti'].xcom_pull(key='engineered_data_path', task_ids='load_data')
@@ -137,7 +136,7 @@ def hourly_train_model_task(**kwargs):
         raise FileNotFoundError(f"Data file not found at path: {data_path}")
 
     # Define the output path for the combined models file
-    combined_output_file = os.path.join(TEMP_DIR, "hourly_all_models.pkl")
+    combined_output_file = os.path.join(TEMP_DIR, "all_models.pkl")
 
     # Pass the data to the model_training function
     models_file_path = run_model_training(data_path, combined_output_file, task_instance=kwargs['ti'])
@@ -146,8 +145,10 @@ def hourly_train_model_task(**kwargs):
     kwargs['ti'].xcom_push(key='models_file_path', value=models_file_path)
     logging.info(f"Model training task completed successfully. Models saved at {models_file_path}")
 
-def hourly_bias_detection_task(**kwargs):
-    logging.info("Starting bias detection for hourly data")
+
+# Task for bias detection (remove dependency on scalers)
+def daily_bias_detection_task(**kwargs):
+    logging.info("Starting bias detection")
 
     # Load processed data path
     data_path = kwargs['ti'].xcom_pull(key='engineered_data_path', task_ids='load_data')
@@ -156,25 +157,25 @@ def hourly_bias_detection_task(**kwargs):
     
     # Load models
     models = {}
-    for target in ['snowfall', 'rain', 'apparent_temperature']:
+    for target in ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']:
         model_path = kwargs['ti'].xcom_pull(key=f"{target}_model_path", task_ids='train_model')
         with open(model_path, "rb") as f:
             models[target] = pickle.load(f)
     
     features = [
-        'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
-        'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
-        'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
+    'temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 'rain_sum',
+    'showers_sum', 'daylight_duration', 'precipitation_sum', 'temperature_range',
+    'diurnal_temp_range', 'precipitation_intensity'
     ]
     
     # Define slicing features and their configurations
     slicing_definitions = {
-        'temperature_2m_bin': {'column': 'temperature_2m', 'bins': 4, 'labels': ['cold', 'cool', 'warm', 'hot']},
-        'precipitation_bin': {'column': 'precipitation', 'bins': 4, 'labels': ['low', 'medium-low', 'medium-high', 'high']}
-    }
+        'temperature_2m_max_bin': {'column': 'temperature_2m_max', 'bins': 4, 'labels': ['cold', 'cool', 'warm', 'hot']},
+        'precipitation_sum_bin': {'column': 'precipitation_sum', 'bins': 4, 'labels': ['low', 'medium-low', 'medium-high', 'high']}
+        }
 
     # List of target variables
-    targets = ['snowfall', 'rain', 'apparent_temperature']
+    targets = ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']
 
     # Dictionary to store metrics for all targets
     all_metrics = {}
@@ -198,16 +199,18 @@ def hourly_bias_detection_task(**kwargs):
             print(f"    By Group RMSE: {by_group}")
             plot_bias_metrics(metrics, slicing_features=[slicing_feature])
 
+
     logging.info("Bias detection task completed successfully.")
 
-def hourly_model_sensitivity_task(bucket_name=BUCKET_NAME, **kwargs):
-    logging.info("Performing model sensitivity analysis for hourly data")
+    
+def daily_model_sensitivity_task(bucket_name=BUCKET_NAME, **kwargs):
+    logging.info("Performing model sensitivity analysis")
 
-    targets = ['snowfall', 'rain', 'apparent_temperature']
+    targets = ['apparent_temperature_max', 'sunshine_duration', 'snowfall_sum']
     features = [
-        'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'precipitation',
-        'cloud_cover', 'pressure_msl', 'wind_speed_10m', 'wind_direction_10m',
-        'is_day', 'hour', 'is_weekend', 'month', 'is_holiday'
+        'temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 'rain_sum',
+        'showers_sum', 'daylight_duration', 'precipitation_sum', 'temperature_range',
+        'diurnal_temp_range', 'precipitation_intensity'
     ]
     models = {}
     processed_data = {}
@@ -258,8 +261,8 @@ def hourly_model_sensitivity_task(bucket_name=BUCKET_NAME, **kwargs):
         except Exception as e:
             logging.error(f"Hyperparameter sensitivity analysis failed for {target}: {e}")
 
-    logging.info("Model sensitivity analysis task for hourly data completed successfully.")
-
+    logging.info("Model sensitivity analysis task completed successfully.")
+    
 # Task to save best models to GCS
 def save_models_to_gcs_task(**kwargs):
     logging.info("Saving best models to GCS")
@@ -268,23 +271,20 @@ def save_models_to_gcs_task(**kwargs):
     best_model_paths = kwargs['ti'].xcom_pull(key='models_file_path', task_ids='train_model')
 
     # Define the GCS path for the model
-    gcs_path = f"assets/hourly_models/hourly_best_model.pkl"
+    gcs_path = f"assets/daily_models/daily_best_model.pkl"
 
     # Save the model to GCS
     save_model_to_gcs(
     model=best_model_paths,
     bucket_name=BUCKET_NAME,
-    file_name= "hourly_best_model"
+    file_name= "daily_best_model"
     )
     logging.info(f"Best mode saved to GCS at {gcs_path}")
 
-
-# Define other tasks similarly to the daily DAG but adapted for hourly data
-
-# Task dependencies
+# Define Airflow tasks
 load_data_operator = PythonOperator(
     task_id='load_data',
-    python_callable=hourly_load_data_task,
+    python_callable=daily_load_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -292,7 +292,7 @@ load_data_operator = PythonOperator(
 
 process_data_operator = PythonOperator(
     task_id='process_data',
-    python_callable=hourly_process_data_task,
+    python_callable=daily_process_data_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -300,7 +300,7 @@ process_data_operator = PythonOperator(
 
 train_model_operator = PythonOperator(
     task_id='train_model',
-    python_callable=hourly_train_model_task,
+    python_callable=daily_train_model_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     execution_timeout=timedelta(minutes=10),
@@ -309,7 +309,7 @@ train_model_operator = PythonOperator(
 
 bias_detection_operator = PythonOperator(
     task_id='bias_detection',
-    python_callable=hourly_bias_detection_task,
+    python_callable=daily_bias_detection_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -318,7 +318,7 @@ bias_detection_operator = PythonOperator(
 # Define the task in the DAG
 model_sensitivity_operator = PythonOperator(
     task_id='model_sensitivity',
-    python_callable=hourly_model_sensitivity_task,
+    python_callable=daily_model_sensitivity_task,
     provide_context=True,
     on_failure_callback=notify_failure,
     dag=dag3
@@ -335,8 +335,8 @@ save_best_model_operator = PythonOperator(
 email_notification_task = EmailOperator(
     task_id='send_email_notification',
     to='keshiarun01@gmail.com',
-    subject='Hourly Model Development Pipeline Completed Successfully',
-    html_content='<p>The Hourly Model Development Pipeline DAG has completed successfully.</p>',
+    subject='Daily Model Development Pipeline Completed Successfully',
+    html_content='<p>The Daily Model Development Pipeline DAG has completed successfully.</p>',
     dag=dag3
 )
 

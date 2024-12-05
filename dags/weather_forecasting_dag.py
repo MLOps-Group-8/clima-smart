@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.sensors.external_task_sensor import ExternalTaskSensor
 from airflow.operators.email import EmailOperator
 from datetime import datetime, timedelta
 import logging
@@ -29,25 +30,46 @@ start_task = BashOperator(
     dag=dag,
   )
 
+# Trigger daily data collection DAG
 daily_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
-    task_id="daily_weather_data_forecasting_trigger",
-    trigger_dag_id="daily_weather_data_pipeline",
+    task_id='daily_weather_data_forecasting_trigger_task',
+    trigger_dag_id='daily_weather_data_pipeline',  # Replace with your daily data pipeline DAG ID
+    reset_dag_run=True,
+    wait_for_completion=True,
     dag=dag,
 )
 
+# Wait for daily model development to complete
+wait_for_daily_model_development = ExternalTaskSensor(
+    task_id='wait_for_daily_model_development',
+    external_dag_id='daily_weather_model_development_pipeline_v2',  # Replace with your daily model development DAG ID
+    external_task_id=None,
+    timeout=600,
+    poke_interval=30,
+    mode='poke',
+    dag=dag,
+)
+
+# Trigger hourly tasks
 hourly_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
-    task_id="hourly_weather_data_forecasting_trigger",
-    trigger_dag_id="hourly_weather_data_pipeline",
+    task_id='hourly_weather_data_forecasting_trigger_task',
+    trigger_dag_id='hourly_weather_data_pipeline',  # Replace with your hourly data pipeline DAG ID
+    reset_dag_run=True,
+    wait_for_completion=True,
     dag=dag,
 )
 
+# Final notification
 email_notification_task = EmailOperator(
-    task_id='send_email_notification',
-    to='darshan.webjaguar@gmail.com',
-    subject='Daily Weather Data Forecasting Pipeline Completed',
-    html_content='<p>Dag Completed</p>',
+    task_id='email_notification_task',
+    to='keshiarun01@gmail.com',  # Replace with the recipient's email address
+    subject='Weather Forecasting Pipeline Completed',
+    html_content='<p>The Weather Forecasting Pipeline has completed successfully.</p>',
     dag=dag,
 )
 
-# Set task dependencies
-start_task >> [daily_weather_data_forecasting_trigger_task, hourly_weather_data_forecasting_trigger_task] >> email_notification_task
+# Define dependencies
+start_task >> daily_weather_data_forecasting_trigger_task
+daily_weather_data_forecasting_trigger_task >> wait_for_daily_model_development
+wait_for_daily_model_development >> hourly_weather_data_forecasting_trigger_task
+hourly_weather_data_forecasting_trigger_task >> email_notification_task

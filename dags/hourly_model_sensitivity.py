@@ -1,117 +1,80 @@
 import shap
-import xgboost as xgb
 import matplotlib.pyplot as plt
-import pandas as pd
-import io
 import logging
-from google.cloud import storage
+import os
+from utils import save_plot_to_gcs
+import xgboost as xgb
 
 
-def upload_to_gcs(bucket_name, destination_path, plt):
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def perform_feature_importance_analysis(model, X_test, feature_names, target, bucket_name):
     """
-    Upload a Matplotlib plot to Google Cloud Storage as an image.
+    Perform feature importance analysis using SHAP for the given model and data.
 
     Args:
-        bucket_name (str): Name of the GCS bucket.
-        destination_path (str): Path in the GCS bucket to save the plot.
-        plt: Matplotlib plot object.
-
-    Returns:
-        None
+        model (xgb.Booster): Trained XGBoost model.
+        X_test (pd.DataFrame): Test dataset features.
+        feature_names (list): List of feature names.
+        target (str): Target variable name.
+        bucket_name (str): Name of the GCS bucket to save the plots.
     """
-    logging.info(f"Uploading plot to GCS bucket {bucket_name} at {destination_path}")
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_path)
+    logging.info(f"Starting feature importance analysis for target: {target} (hourly data)")
 
-    # Save the plot to a bytes buffer
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format="png", bbox_inches="tight")
-    buffer.seek(0)
+    # Convert test data to DMatrix for SHAP analysis
+    dmatrix_test = xgb.DMatrix(X_test)
 
-    # Upload the bytes buffer to GCS
-    blob.upload_from_file(buffer, content_type="image/png")
-    logging.info(f"Plot uploaded successfully to gs://{bucket_name}/{destination_path}")
-
-
-def calculate_shap_values(model, X_test, feature_names):
-    """
-    Calculate SHAP values for the given model and test data.
-
-    Args:
-        model: Trained XGBoost model.
-        X_test (numpy.ndarray): Test data used for SHAP analysis.
-        feature_names (list): Names of the features.
-
-    Returns:
-        shap_values: SHAP values for the test data.
-    """
-    logging.info("Calculating SHAP values.")
+    # Use SHAP TreeExplainer
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_test)
-    return shap_values
 
-
-def generate_shap_plots(bucket_name, shap_values, X_test, feature_names, target, weather_data_plots_path):
-    """
-    Generate SHAP summary plots and save them to GCS.
-
-    Args:
-        bucket_name (str): Name of the GCS bucket.
-        shap_values: SHAP values for the test data.
-        X_test (numpy.ndarray): Test data used for SHAP analysis.
-        feature_names (list): Names of the features.
-        target (str): Target variable being analyzed.
-        weather_data_plots_path (str): GCS path to save the SHAP plots.
-
-    Returns:
-        None
-    """
-    logging.info(f"Generating SHAP plots for target: {target}")
-
-    # Summary Plot - Bar
-    plt.figure()
-    shap.summary_plot(shap_values, X_test, feature_names=feature_names, plot_type="bar", show=False)
-    bar_plot_path = f"{weather_data_plots_path}Hourly_SHAP_Bar_Summary_{target}.png"
-    upload_to_gcs(bucket_name, bar_plot_path, plt)
-    plt.close()
-
-    # Summary Plot - Detailed
+    # Generate SHAP summary plot
     plt.figure()
     shap.summary_plot(shap_values, X_test, feature_names=feature_names, show=False)
-    detailed_plot_path = f"{weather_data_plots_path}Hourly_SHAP_Detailed_Summary_{target}.png"
-    upload_to_gcs(bucket_name, detailed_plot_path, plt)
-    plt.close()
+    shap_plot_name = f"hourly_{target}_shap_summary_plot"
+    save_plot_to_gcs(bucket_name, shap_plot_name)
+    plt.close()  # Close the sensitivity plot
 
-    logging.info(f"SHAP plots for target {target} uploaded to GCS.")
+    logging.info(f"SHAP summary plot for hourly target {target} saved as {shap_plot_name}.png in GCS.")
 
+    # Generate SHAP dependence plots for each feature
+    for feature in feature_names:
+        plt.figure()
+        shap.dependence_plot(feature, shap_values, X_test, feature_names=feature_names, show=False)
+        dependence_plot_name = f"hourly_{target}_shap_dependence_plot_{feature}"
+        save_plot_to_gcs(bucket_name, dependence_plot_name)
+        plt.close()  # Close the sensitivity plot
+        logging.info(f"SHAP dependence plot for hourly feature {feature} saved as {dependence_plot_name}.png in GCS.")
+    return None
 
-def analyze_hourly_model_sensitivity(models, processed_data, features, targets, bucket_name, weather_data_plots_path):
+def perform_hyperparameter_sensitivity_analysis(trials, target, bucket_name):
     """
-    Perform model sensitivity analysis for hourly data using SHAP and upload plots to GCS.
+    Perform hyperparameter sensitivity analysis using the hyperopt trials.
 
     Args:
-        models (dict): Dictionary of trained models, keyed by target name.
-        processed_data (dict): Dictionary containing test data for each target.
-        features (list): Feature names used in the model.
-        targets (list): List of target variables being analyzed.
-        bucket_name (str): Name of the GCS bucket.
-        weather_data_plots_path (str): GCS path to save the SHAP plots.
-
-    Returns:
-        None
+        trials (hyperopt.Trials): Hyperopt trials object from hyperparameter tuning.
+        target (str): Target variable name.
+        bucket_name (str): Name of the GCS bucket to save the plots.
     """
-    logging.info("Starting hourly model sensitivity analysis.")
+    logging.info(f"Starting hyperparameter sensitivity analysis for target: {target} (hourly data)")
 
-    for target in targets:
-        logging.info(f"Analyzing sensitivity for target: {target}")
-        model = models[target]
-        X_test = processed_data[target]["X_test"]
+    results = trials.results
+    hyperparams = trials.vals
 
-        # Calculate SHAP values
-        shap_values = calculate_shap_values(model, X_test, features)
+    # Collect RMSE and hyperparameters
+    rmse_list = [result["loss"] for result in results]
+    param_names = list(hyperparams.keys())
 
-        # Generate SHAP plots and upload them to GCS
-        generate_shap_plots(bucket_name, shap_values, X_test, features, target, weather_data_plots_path)
-
-    logging.info("Hourly model sensitivity analysis completed.")
+    # Plot the sensitivity of each hyperparameter
+    for param in param_names:
+        plt.figure()
+        plt.scatter(hyperparams[param], rmse_list)
+        plt.xlabel(param)
+        plt.ylabel("RMSE")
+        plt.title(f"Sensitivity of {param} on RMSE for hourly target {target}")
+        plot_name = f"hourly_{target}_hyperparameter_sensitivity_{param}"
+        save_plot_to_gcs(bucket_name, plot_name)
+        plt.close()  # Close the sensitivity plot
+        logging.info(f"Hyperparameter sensitivity plot for hourly {param} saved as {plot_name}.png in GCS.")
+    return None
