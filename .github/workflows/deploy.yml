@@ -31,7 +31,7 @@ jobs:
 
       - name: Create New VM
         run: |
-          gcloud config set compute/zone $GCP_ZONE
+          gcloud config set compute/zone ${{ env.GCP_ZONE }}
           gcloud compute instances create ${{ env.NEW_VM_NAME }} \
             --machine-type=e2-standard-2 \
             --boot-disk-size=50GB \
@@ -43,7 +43,7 @@ jobs:
 
       - name: Enable Cloud Monitoring on New VM
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=${{ env.GCP_ZONE }} --command "
             curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh &&
             sudo bash add-monitoring-agent-repo.sh &&
             sudo apt-get update &&
@@ -69,7 +69,7 @@ jobs:
 
       - name: Install Docker and Deploy Code on New VM
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=${{ env.GCP_ZONE }} --command "
             # Update and install prerequisites
             sudo apt-get update &&
             sudo apt-get install -y ca-certificates curl &&
@@ -115,7 +115,7 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=${{ env.GCP_ZONE }} --command "
             curl -I http://localhost:8080 || echo 'Deployment verification failed'
           "
 
@@ -126,7 +126,7 @@ jobs:
         run: |
           OLD_VM_NAME=$(gcloud compute instances list --filter="name ~ '^airflow-' AND name!='$NEW_VM_NAME'" --format="value(name)" | head -n 1)
           if [ -n "$OLD_VM_NAME" ]; then
-            gcloud compute instances delete $OLD_VM_NAME --zone=$GCP_ZONE --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
+            gcloud compute instances delete $OLD_VM_NAME --zone=${{ env.GCP_ZONE }} --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
           else
             echo "No previous VM found to delete."
           "
