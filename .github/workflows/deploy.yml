@@ -72,31 +72,28 @@ jobs:
             --direction=INGRESS \
             --target-tags=http-server || echo "Mlflow firewall rule already exists"
 
+      - name: Fetch Repository
+        run: |
+          # Clone the repository to a temporary location on the runner
+          git clone https://github.com/MLOps-Group-8/clima-smart.git ~/clima-smart
+
+      - name: Upload Repository and Deployment Script to VM
+        run: |
+          # Upload the repository to the VM
+          gcloud compute scp --recurse --zone=$GCP_ZONE ~/clima-smart ${{ env.NEW_VM_NAME }}:~/
+
+      - name: Run Docker Setup Script on VM
+        run: |
+          # SSH into the VM, make the script executable, and execute it
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
+            chmod +x ~/clima-smart/scripts/setup_docker.sh &&
+            ~/clima-smart/scripts/setup_docker.sh
+          "
+
       - name: Install Docker and Deploy Code on New VM
         run: |
           gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
-            # Update and install prerequisites
-            sudo apt-get update &&
-            sudo apt-get install -y ca-certificates curl &&
-            
-            # Add Docker's official GPG key
-            sudo install -m 0755 -d /etc/apt/keyrings &&
-            sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc &&
-            sudo chmod a+r /etc/apt/keyrings/docker.asc &&
-
-            # Add Docker's official repository
-            echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo '\$VERSION_CODENAME') stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null &&
-            
-            # Update and install Docker
-            sudo apt-get update &&
-            sudo apt-get install -y docker-ce docker-ce-cli containerd.io &&
-
-            # Enable and start Docker service
-            sudo systemctl start docker &&
-            sudo systemctl enable docker &&
-            
-            # Clone the repository
-            git clone https://github.com/MLOps-Group-8/clima-smart.git &&
+            # Change to the repository directory
             cd clima-smart &&
 
             # Set permissions for scripts and other required files
