@@ -113,6 +113,7 @@ jobs:
             docker compose up -d
           "
 
+
       - name: Verify Deployment
         run: |
           gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=$GCP_ZONE --command "
