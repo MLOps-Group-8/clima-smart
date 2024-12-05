@@ -4,26 +4,16 @@ import numpy as np
 import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
 
+# Function to fetch the data from CSV file (could be from GCS or local)
+def fetch_data_from_csv(file_path):
+    df = pd.read_csv(daily)
+    return df
+
 # Load the trained XGBoost model
 def load_model(model_path):
     model = xgb.Booster()
     model.load_model(model_path)
     return model
-
-# Load sample test data for prediction
-def load_test_data(scaler_features):
-    # Generate mock data resembling the test data structure
-    test_data = {
-        'temperature_2m_max': [20, 21, 19],
-        'temperature_2m_min': [10, 9, 8],
-        'apparent_temperature_min': [15, 14, 13],
-        'rain_sum': [2, 0, 3],
-        'showers_sum': [1, 0, 2],
-        'daylight_duration': [10, 11, 9],
-    }
-    df = pd.DataFrame(test_data)
-    df_scaled = scaler_features.transform(df)
-    return df_scaled
 
 # Main Streamlit App
 def main():
@@ -31,29 +21,40 @@ def main():
     st.write("This app predicts the next 3 days' apparent maximum temperature using a trained XGBoost model.")
 
     # Model path
-    model_path = "xgb_model_apparent_temperature_max.json"
+    model_path = "daily_best_model.pkl"
 
     try:
-        # Load model
+        # Load the XGBoost model
         model = load_model(model_path)
         st.success("Model loaded successfully!")
+
+        # Fetch real-time test data from CSV file
+        # Replace with your GCS or local CSV path
+        csv_file_path = "engineered_hourly_data.csv"  # Update this path
+        test_data = fetch_data_from_csv(csv_file_path)
+
+        # Display the real-time fetched data
+        st.write("Fetched Real-Time Weather Data:")
+        st.dataframe(test_data)
 
         # Initialize scaler for features (same as training setup)
         scaler_features = StandardScaler()
         scaler_features.fit_transform(np.array([[20, 10, 15, 2, 1, 10]]))  # Dummy fit for reproducibility
 
-        # Load test data
-        X_test_sample = load_test_data(scaler_features)
-        dtest_sample = xgb.DMatrix(X_test_sample)
+        # Prepare data for prediction
+        X_test = test_data[['temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 
+                             'rain_sum', 'showers_sum', 'daylight_duration']]  # Select relevant columns
+        X_test_scaled = scaler_features.transform(X_test)
+        dtest = xgb.DMatrix(X_test_scaled)
 
         # Make predictions
-        y_pred_sample = model.predict(dtest_sample)
+        y_pred = model.predict(dtest)
 
         # Display predictions
         st.header("Next 3 Days Forecast")
         forecast = pd.DataFrame({
             "Day": ["Day 1", "Day 2", "Day 3"],
-            "Predicted Apparent Temperature Max": y_pred_sample
+            "Predicted Apparent Temperature Max": y_pred
         })
         st.table(forecast)
 
