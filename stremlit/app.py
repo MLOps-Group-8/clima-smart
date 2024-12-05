@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 
 # Function to fetch the data from CSV file (could be from GCS or local)
 def fetch_data_from_csv(file_path):
-    df = pd.read_csv(daily)
+    df = pd.read_csv('engineered_hourly_data.csv')
     return df
 
 # Load the trained XGBoost model
