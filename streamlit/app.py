@@ -76,5 +76,5 @@ def main():
         st.error(f"An error occurred: {e}")
         st.exception(e)
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
