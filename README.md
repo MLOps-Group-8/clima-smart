@@ -400,22 +400,20 @@ XGBoost (eXtreme Gradient Boosting) is a high-performance algorithm that excels 
 - Offering built-in regularization for better generalization.
 
 **Data Preparation**
-
 The weather dataset is preprocessed as follows:
-
 Numerical columns are scaled or normalized if needed.
 
 Data Splitting:
-Training set: 70%
-Validation set: 15%
-Test set: 15%
+- Training set: 70%
+- Validation set: 15%
+- Test set: 15%
 
 The target variable is temperature_2m, while the predictors include other meteorological features.
 
 **Installation and Usage**
 Prerequisites
-Python 3.x
-Libraries: xgboost, pandas, numpy, matplotlib, scikit-learn
+- Python 3.x
+- Libraries: xgboost, pandas, numpy, matplotlib, scikit-learn
 
 The XGBoost model achieves high accuracy with minimal computational overhead compared to deep learning models.
 
