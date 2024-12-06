@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Streamlit App by Cloning and Building on the Managed Instance
+    name: Deploy Streamlit App with Load Balancer
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -89,21 +89,7 @@ jobs:
               --version=template=${{ env.TEMPLATE_NAME }} \
               --zone=us-east1-b
           fi
-
-      - name: Verify Deployment
-        run: |
-          for i in {1..30}; do
-            STATUS=$(gcloud compute instance-groups managed list-instances ${{ env.DEPLOYMENT_GROUP }} --zone=us-east1-b --format="value(instance,status)" | grep -v "RUNNING")
-            if [ -z "$STATUS" ]; then
-              echo "All instances are running."
-              exit 0
-            fi
-            echo "Waiting for instances to become healthy..."
-            sleep 10
-          done
-          echo "Deployment verification failed."
-          exit 1
-      
+                
       - name: Set up Health Checks
         run: |
           gcloud compute health-checks create http streamlit-health-check \
@@ -112,7 +98,13 @@ jobs:
             --check-interval=10s \
             --timeout=5s \
             --unhealthy-threshold=3 \
-            --healthy-threshold=2
+            --healthy-threshold=2 || echo "Health check already exists."
+
+      - name: Attach Health Check to Instance Group
+        run: |
+          gcloud compute instance-groups managed set-named-ports ${{ env.DEPLOYMENT_GROUP }} \
+            --named-ports=http:8501 \
+            --zone=us-east1-b
 
       - name: Create Backend Service
         run: |
@@ -120,4 +112,59 @@ jobs:
             --protocol=HTTP \
             --health-checks=streamlit-health-check \
             --port-name=http \
-            --global
+            --global || echo "Backend service already exists."
+
+      - name: Add Instance Group to Backend Service
+        run: |
+          gcloud compute backend-services add-backend streamlit-backend \
+            --instance-group=${{ env.DEPLOYMENT_GROUP }} \
+            --instance-group-zone=us-east1-b \
+            --global || echo "Instance group already attached."
+
+      - name: Create URL Map
+        run: |
+          gcloud compute url-maps create streamlit-url-map \
+            --default-service=streamlit-backend || echo "URL map already exists."
+
+      - name: Create HTTP Proxy
+        run: |
+          gcloud compute target-http-proxies create streamlit-http-proxy \
+            --url-map=streamlit-url-map || echo "HTTP proxy already exists."
+
+      - name: Reserve Global Static IP
+        run: |
+          gcloud compute addresses create streamlit-ip \
+            --ip-version=IPV4 \
+            --global || echo "Static IP already reserved."
+
+      - name: Create Global Forwarding Rule
+        run: |
+          gcloud compute forwarding-rules create streamlit-rule \
+            --address=streamlit-ip \
+            --global \
+            --target-http-proxy=streamlit-http-proxy \
+            --ports=80 || echo "Forwarding rule already exists."
+
+      - name: Verify Deployment
+        run: |
+          echo "Starting deployment verification..."
+          EXTERNAL_IP=$(gcloud compute forwarding-rules describe streamlit-rule \
+            --global \
+            --format="value(IPAddress)")
+          if [ -z "$EXTERNAL_IP" ]; then
+            echo "Failed to retrieve external IP. Exiting."
+            exit 1
+          fi
+          echo "External IP: $EXTERNAL_IP"
+          for i in {1..30}; do
+            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" "http://$EXTERNAL_IP")
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "Deployment successful! Application is reachable at http://$EXTERNAL_IP"
+              exit 0
+            else
+              echo "Application not ready. HTTP status: $HTTP_STATUS. Retrying..."
+              sleep 10
+            fi
+          done
+          echo "Deployment verification failed."
+          exit 1
