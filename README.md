@@ -390,6 +390,50 @@ Using DVC enhances reproducibility and traceability of data changes across the p
 
 ---
 ### Model Development
+The primary goal of this project is to predict future weather conditions, particularly temperature (temperature_2m), using historical weather features such as wind speed, humidity, and pressure. XGBoost, a powerful gradient boosting framework, is employed to handle the dataset and provide high accuracy with feature interpretability.
+
+**Why XGBoost?**
+XGBoost (eXtreme Gradient Boosting) is a high-performance algorithm that excels in:
+
+- Handling large datasets with tabular features.
+- Capturing non-linear patterns and interactions.
+- Offering built-in regularization for better generalization.
+
+**Data Preparation**
+
+The weather dataset is preprocessed as follows:
+
+Numerical columns are scaled or normalized if needed.
+
+Data Splitting:
+Training set: 70%
+Validation set: 15%
+Test set: 15%
+
+The target variable is temperature_2m, while the predictors include other meteorological features.
+
+**Installation and Usage**
+Prerequisites
+Python 3.x
+Libraries: xgboost, pandas, numpy, matplotlib, scikit-learn
+Installation
+
+Clone this repository:
+bash
+Copy code
+git clone https://github.com/your-username/xgboost-weather-prediction.git
+cd xgboost-weather-prediction
+
+Install dependencies:
+bash
+Copy code
+pip install -r requirements.txt
+
+The XGBoost model achieves high accuracy with minimal computational overhead compared to deep learning models.
+
+**Visualization**
+- Feature Importance: Visualize the most influential weather features contributing to temperature prediction:
+- Predictions vs Actual Values: Compare the predicted temperatures against the actual temperatures
 
 ## Conclusion
 
