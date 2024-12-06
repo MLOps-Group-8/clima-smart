@@ -3,11 +3,11 @@ name: Deploy Streamlit to GCP Managed Instance
 on:
   push:
     branches:
-      - main
+      - model-deployment-ds
 
 jobs:
   deploy:
-    name: Deploy Streamlit App with Load Balancer
+    name: Deploy Streamlit App with Load Balancer and Firewall Rules
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -18,10 +18,12 @@ jobs:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: us-east1
           DEPLOYMENT_GROUP: streamlit-group
+          NETWORK_TAG: http-server
         run: |
           TEMPLATE_NAME="streamlit-template-$(date +%s)"
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
           echo "DEPLOYMENT_GROUP=$DEPLOYMENT_GROUP" >> $GITHUB_ENV
+          echo "NETWORK_TAG=$NETWORK_TAG" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
@@ -31,12 +33,29 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Create Firewall Rules
+        run: |
+          # Allow HTTP traffic on port 80
+          gcloud compute firewall-rules create allow-http \
+            --allow tcp:80 \
+            --target-tags=${{ env.NETWORK_TAG }} \
+            --description="Allow HTTP traffic" \
+            --direction=INGRESS || echo "Firewall rule for HTTP already exists."
+
+          # Allow Streamlit traffic on port 8501
+          gcloud compute firewall-rules create allow-streamlit \
+            --allow tcp:8501 \
+            --target-tags=${{ env.NETWORK_TAG }} \
+            --description="Allow Streamlit traffic" \
+            --direction=INGRESS || echo "Firewall rule for Streamlit already exists."
+
       - name: Create Instance Template
         run: |
           gcloud compute instance-templates create ${{ env.TEMPLATE_NAME }} \
             --machine-type=e2-standard-2 \
             --region=${{ env.GCP_REGION }} \
             --network=default \
+            --tags=${{ env.NETWORK_TAG }} \
             --image-family=debian-11 \
             --image-project=debian-cloud \
             --boot-disk-size=20GB \
