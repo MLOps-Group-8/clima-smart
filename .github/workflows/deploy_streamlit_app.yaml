@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Streamlit App with Monitoring and Zero Downtime
+    name: Deploy Streamlit App by Cloning and Building on the Managed Instance
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -19,9 +19,7 @@ jobs:
           GCP_REGION: us-east1
           DEPLOYMENT_GROUP: streamlit-group
         run: |
-          IMAGE_NAME="gcr.io/$GCP_PROJECT_ID/streamlit-app:latest"
           TEMPLATE_NAME="streamlit-template-$(date +%s)"
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
           echo "DEPLOYMENT_GROUP=$DEPLOYMENT_GROUP" >> $GITHUB_ENV
 
@@ -32,15 +30,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-      
-      - name: Authenticate Docker with GCP
-        run: |
-          gcloud auth configure-docker gcr.io
-
-      - name: Build and Push Docker Image
-        run: |
-          docker build -t ${{ env.IMAGE_NAME }} ./streamlit
-          docker push ${{ env.IMAGE_NAME }}
 
       - name: Create Instance Template
         run: |
@@ -53,20 +42,33 @@ jobs:
             --boot-disk-size=20GB \
             --boot-disk-type=pd-standard \
             --metadata=startup-script='#! /bin/bash
-            # Install Docker
-            sudo apt-get update
-            sudo apt-get install -y docker.io
-            sudo systemctl start docker
             
-            # Run the Streamlit app container
-            echo "export GOOGLE_APPLICATION_CREDENTIALS=/config/key.json" >> ~/.bashrc
+            # Install Docker and required tools
+            sudo apt-get update
+            sudo apt-get install -y git docker.io
+            sudo systemctl start docker
+
+            # Clone the repository
+            git clone https://github.com/MLOps-Group-8/clima-smart.git /opt/clima-smart
+            cd /opt/clima-smart/streamlit
+
+            # Set up Google Cloud credentials
+            echo "Exporting GOOGLE_APPLICATION_CREDENTIALS..."
             sudo mkdir -p /config
             sudo gsutil cp gs://clima-smart-secrets/key.json /config/key.json
-            sudo docker run -d -p 8501:8501 \
+            if [ ! -f /config/key.json ]; then
+              echo "Error: key.json file not found. Exiting."
+              exit 1
+            fi
+            sudo chmod 600 /config/key.json
+
+            # Build and run the Docker container
+            sudo docker build -t streamlit-app .
+            sudo docker run -p 8501:8501 \
               -v /config:/config \
               -e GOOGLE_APPLICATION_CREDENTIALS=/config/key.json \
-              ${{ env.IMAGE_NAME }}'
-
+              streamlit-app'
+            
       - name: Create or Update Managed Instance Group
         run: |
           # Check if the instance group already exists
@@ -101,3 +103,21 @@ jobs:
           done
           echo "Deployment verification failed."
           exit 1
+      
+      - name: Set up Health Checks
+        run: |
+          gcloud compute health-checks create http streamlit-health-check \
+            --request-path="/" \
+            --port=8501 \
+            --check-interval=10s \
+            --timeout=5s \
+            --unhealthy-threshold=3 \
+            --healthy-threshold=2
+
+      - name: Create Backend Service
+        run: |
+          gcloud compute backend-services create streamlit-backend \
+            --protocol=HTTP \
+            --health-checks=streamlit-health-check \
+            --port-name=http \
+            --global
