@@ -45,7 +45,7 @@ def main():
 
     # Sidebar Configuration
     st.sidebar.header("Configuration")
-    model_path = st.sidebar.text_input("Model Path in GCS", "/assets/daily_models/daily_best_model.pkl")
+    model_path = st.sidebar.text_input("Model Path in GCS", "/assets/daily_models/daily_best_model.json")
     csv_file_path = st.sidebar.text_input("CSV Path in GCS", "/weather-data/engineered_daily_data.csv")
 
     try:
@@ -56,7 +56,7 @@ def main():
 
         # Fetch CSV data
         st.sidebar.info("Fetching real-time data...")
-        test_data = pd.read_csv("engineered_daily_data.csv")
+        test_data = fetch_data_from_gcs(BUCKET_NAME, csv_file_path)
         st.sidebar.success("Data fetched successfully!")
 
         # Display the fetched data
