@@ -18,7 +18,7 @@ EXPOSE 5000
 # CMD mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db
 
 CMD mlflow server \
-    --backend-store-uri sqlite:///mlflow.db \
+    --backend-store-uri sqlite:////mlflow/mlflow.db \
     --default-artifact-root /mlflow/artifacts \
     --artifacts-destination /mlflow/artifacts \
     --host 0.0.0.0

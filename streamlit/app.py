@@ -2,93 +2,79 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-from sklearn.preprocessing import StandardScaler
+import pickle
 from google.cloud import storage
-import tempfile
-import os
+from sklearn.preprocessing import StandardScaler
 
-# Google Cloud Storage Setup
-BUCKET_NAME = "clima-smart-data-collection"
-
-# Ensure the credentials are set up
-credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-if not credentials_path:
-    raise EnvironmentError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-
-
-def fetch_data_from_gcs(bucket_name, file_path):
-    """Fetch file from GCS bucket."""
+# Function to fetch data from GCS bucket
+def fetch_data_from_gcs(bucket_name, blob_name):
     client = storage.Client()
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(file_path)
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        blob.download_to_filename(temp_file.name)
-        return pd.read_csv(temp_file.name)
+    blob = bucket.blob(blob_name)
+    with blob.open("rb") as f:
+        data = pickle.load(f)
+    return data
 
-def load_model_from_gcs(bucket_name, model_path):
-    """Load model from GCS bucket."""
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(model_path)
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        blob.download_to_filename(temp_file.name)
-        model = xgb.Booster()
-        model.load_model(temp_file.name)
-        return model
+# Load the trained XGBoost model
+def load_model(model_path):
+    model = xgb.Booster()
+    model.load_model(model_path)
+    return model
 
 # Main Streamlit App
 def main():
-
-    st.set_page_config(page_title="3-Day Weather Forecast", layout="wide")
-    st.title("🌤️ 3-Day Weather Forecast")
+    st.title("3-Day Weather Forecast")
     st.write("This app predicts the next 3 days' apparent maximum temperature using a trained XGBoost model.")
 
-    # Sidebar Configuration
-    st.sidebar.header("Configuration")
-    model_path = st.sidebar.text_input("Model Path in GCS", "/assets/daily_models/daily_best_model.json")
-    csv_file_path = st.sidebar.text_input("CSV Path in GCS", "/weather-data/engineered_daily_data.csv")
+    # Configuration for GCS paths
+    bucket_name = "clima-smart-data-collection"
+    model_blob_name = "assets/daily_models/daily_best_models.json"
+    scaler_blob_name = "assets/daily_scaler/daily_scaler.pkl"
+    test_data_blob_name = "assets/daily_data_splits/X_test.pkl"
+    test_target_blob_name = "assets/daily_data_splits/y_test.pkl"
 
     try:
-        # Fetch and load model
-        st.sidebar.info("Fetching and loading model...")
-        model = load_model_from_gcs(BUCKET_NAME, model_path)
-        st.sidebar.success("Model loaded successfully!")
+        # Load the XGBoost model from GCS
+        model_path = "/tmp/daily_best_model.json"
+        storage.Client().bucket(bucket_name).blob(model_blob_name).download_to_filename(model_path)
+        model = load_model(model_path)
+        st.success("Model loaded successfully!")
 
-        # Fetch CSV data
-        st.sidebar.info("Fetching real-time data...")
-        test_data = fetch_data_from_gcs(BUCKET_NAME, csv_file_path)
-        st.sidebar.success("Data fetched successfully!")
+        # Load the scaler from GCS
+        scaler_blob_path = "/tmp/daily_scaler.pkl"
+        storage.Client().bucket(bucket_name).blob(scaler_blob_name).download_to_filename(scaler_blob_path)
+        with open(scaler_blob_path, "rb") as f:
+            scaler_features = pickle.load(f)
 
-        # Display the fetched data
-        st.subheader("Fetched Real-Time Weather Data:")
-        st.dataframe(test_data)
+        st.success("Scaler loaded successfully!")
 
-        # Initialize scaler (ensure consistency with training setup)
-        scaler_features = StandardScaler()
-        scaler_features.fit(np.array([[20, 10, 15, 2, 1, 10]]))  # Dummy fit for reproducibility
+        # Fetch test data and target from GCS
+        X_test = fetch_data_from_gcs(bucket_name, test_data_blob_name)
+        y_test = fetch_data_from_gcs(bucket_name, test_target_blob_name)
 
-        # Prepare data for prediction
-        X_test = test_data[['temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_min', 
-                             'rain_sum', 'showers_sum', 'daylight_duration']]
+        st.write("Test data fetched successfully!")
+
+        # Prepare test data for prediction
         X_test_scaled = scaler_features.transform(X_test)
         dtest = xgb.DMatrix(X_test_scaled)
 
         # Make predictions
         y_pred = model.predict(dtest)
 
-        # Display predictions with a chart
-        st.subheader("📊 Next 3 Days Forecast")
+        # Inverse transform predictions (if required)
+        st.write("Predictions made successfully!")
+        st.header("Prediction Results")
+        
+        # Display predictions for the next 3 days
         forecast = pd.DataFrame({
-            "Day": ["Day 1", "Day 2", "Day 3"],
+            "Day": [f"Day {i+1}" for i in range(len(y_pred))],
             "Predicted Apparent Temperature Max": y_pred
         })
         st.table(forecast)
 
-        # Visualization
-        st.line_chart(forecast.set_index("Day"))
-
     except Exception as e:
         st.error(f"An error occurred: {e}")
+        st.exception(e)
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     main()
