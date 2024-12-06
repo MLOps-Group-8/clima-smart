@@ -3,7 +3,7 @@ name: Deploy Airflow to GCP VM
 on:
   push:
     branches:
-      - model-deployment-ds
+      - main
 
 jobs:
   deploy:
@@ -121,12 +121,6 @@ jobs:
             echo 'Ops Agent configured for Airflow and restarted.'
           "
           
-      - name: Verify Deployment
-        run: |
-          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
-            curl -I http://localhost:8080 || echo 'Deployment verification failed'
-          "
-
       - name: Delete Previous VM
         if: success()
         run: |

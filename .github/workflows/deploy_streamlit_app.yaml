@@ -3,7 +3,7 @@ name: Deploy Streamlit to GCP Managed Instance
 on:
   push:
     branches:
-      - model-deployment-ds
+      - main
 
 jobs:
   deploy:
@@ -17,7 +17,7 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: us-east1
-          DEPLOYMENT_GROUP: streamlit-group
+          DEPLOYMENT_GROUP: streamlit-group-new
           NETWORK_TAG: http-server
         run: |
           TEMPLATE_NAME="streamlit-template-$(date +%s)"
