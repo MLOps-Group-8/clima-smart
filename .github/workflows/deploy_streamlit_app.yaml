@@ -17,10 +17,10 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: us-east1
+          DEPLOYMENT_GROUP: streamlit-group
         run: |
           IMAGE_NAME="gcr.io/$GCP_PROJECT_ID/streamlit-app:latest"
           TEMPLATE_NAME="streamlit-template-$(date +%s)"
-          DEPLOYMENT_GROUP="streamlit-group"
           echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
           echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
           echo "DEPLOYMENT_GROUP=$DEPLOYMENT_GROUP" >> $GITHUB_ENV
@@ -32,7 +32,7 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-
+      
       - name: Authenticate Docker with GCP
         run: |
           gcloud auth configure-docker gcr.io
@@ -42,7 +42,7 @@ jobs:
           docker build -t ${{ env.IMAGE_NAME }} ./streamlit
           docker push ${{ env.IMAGE_NAME }}
 
-      - name: Create Instance Template with Monitoring
+      - name: Create Instance Template
         run: |
           gcloud compute instance-templates create ${{ env.TEMPLATE_NAME }} \
             --machine-type=e2-standard-2 \
@@ -58,35 +58,6 @@ jobs:
             sudo apt-get install -y docker.io
             sudo systemctl start docker
             
-            # Install Google Cloud Ops Agent for Monitoring and Logging
-            curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
-            sudo bash add-google-cloud-ops-agent-repo.sh --also-install
-            sudo systemctl restart google-cloud-ops-agent
-
-            # Set up application-specific monitoring configuration
-            sudo tee /etc/google-cloud-ops-agent/config.yaml > /dev/null <<EOF
-            logging:
-              receivers:
-                streamlit_logs:
-                  type: files
-                  include_paths:
-                    - /var/log/docker.log
-                    - /var/lib/docker/containers/*/*.log
-              service:
-                pipelines:
-                  default_pipeline:
-                    receivers: [streamlit_logs]
-            metrics:
-              receivers:
-                host_metrics:
-                  type: hostmetrics
-              service:
-                pipelines:
-                  default_pipeline:
-                    receivers: [host_metrics]
-            EOF
-            sudo systemctl restart google-cloud-ops-agent
-
             # Run the Streamlit app container
             echo "export GOOGLE_APPLICATION_CREDENTIALS=/config/key.json" >> ~/.bashrc
             sudo mkdir -p /config
@@ -96,11 +67,26 @@ jobs:
               -e GOOGLE_APPLICATION_CREDENTIALS=/config/key.json \
               ${{ env.IMAGE_NAME }}'
 
-      - name: Perform Rolling Update
+      - name: Create or Update Managed Instance Group
         run: |
-          gcloud compute instance-groups managed rolling-action start-update ${{ env.DEPLOYMENT_GROUP }} \
-            --version=template=${{ env.TEMPLATE_NAME }} \
-            --zone=us-east1-b
+          # Check if the instance group already exists
+          INSTANCE_GROUP_EXISTS=$(gcloud compute instance-groups managed list \
+            --filter="name=${{ env.DEPLOYMENT_GROUP }}" \
+            --zones=us-east1-b --format="value(name)" | grep -w ${{ env.DEPLOYMENT_GROUP }} || echo "")
+          
+          if [ -z "$INSTANCE_GROUP_EXISTS" ]; then
+            echo "Creating managed instance group..."
+            gcloud compute instance-groups managed create ${{ env.DEPLOYMENT_GROUP }} \
+              --base-instance-name=streamlit-instance \
+              --template=${{ env.TEMPLATE_NAME }} \
+              --size=1 \
+              --zone=us-east1-b
+          else
+            echo "Managed instance group already exists. Performing rolling update..."
+            gcloud compute instance-groups managed rolling-action start-update ${{ env.DEPLOYMENT_GROUP }} \
+              --version=template=${{ env.TEMPLATE_NAME }} \
+              --zone=us-east1-b
+          fi
 
       - name: Verify Deployment
         run: |
@@ -115,57 +101,3 @@ jobs:
           done
           echo "Deployment verification failed."
           exit 1
-
-      - name: Shut Down Previous Instances
-        run: |
-          OLD_INSTANCES=$(gcloud compute instances list --filter="name ~ '^streamlit-instance' AND status!='RUNNING'" --format="value(name)")
-          if [ -n "$OLD_INSTANCES" ]; then
-            for instance in $OLD_INSTANCES; do
-              gcloud compute instances delete $instance --zone=us-east1-b --quiet || echo "Failed to delete old instance: $instance"
-            done
-          else
-            echo "No old instances to shut down."
-          fi
-
-      - name: Create Load Balancer (If Not Already Created)
-        run: |
-          # Set up health checks
-          gcloud compute health-checks create tcp streamlit-health-check \
-            --port=8501 || echo "Health check already exists."
-
-          # Attach health checks to instance group
-          gcloud compute instance-groups managed set-named-ports ${{ env.DEPLOYMENT_GROUP }} \
-            --named-ports=http:8501 --zone=us-east1-b || echo "Named ports already set."
-
-          # Create a backend service
-          gcloud compute backend-services create streamlit-backend \
-            --protocol=HTTP \
-            --health-checks=streamlit-health-check \
-            --port-name=http \
-            --global || echo "Backend service already exists."
-
-          # Add the instance group to the backend service
-          gcloud compute backend-services add-backend streamlit-backend \
-            --instance-group=${{ env.DEPLOYMENT_GROUP }} \
-            --instance-group-zone=us-east1-b \
-            --global || echo "Instance group already attached to backend service."
-
-          # Create a URL map
-          gcloud compute url-maps create streamlit-url-map \
-            --default-service=streamlit-backend || echo "URL map already exists."
-
-          # Create a target HTTP proxy
-          gcloud compute target-http-proxies create streamlit-http-proxy \
-            --url-map=streamlit-url-map || echo "HTTP proxy already exists."
-
-          # Reserve a global static IP address
-          gcloud compute addresses create streamlit-ip \
-            --ip-version=IPV4 \
-            --global || echo "Static IP already reserved."
-
-          # Create a global forwarding rule
-          gcloud compute forwarding-rules create streamlit-rule \
-            --address=streamlit-ip \
-            --global \
-            --target-http-proxy=streamlit-http-proxy \
-            --ports=80 || echo "Forwarding rule already exists."
