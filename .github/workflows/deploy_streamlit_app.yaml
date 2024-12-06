@@ -1,0 +1,170 @@
+name: Deploy Streamlit to GCP Managed Instance
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy Streamlit App with Load Balancer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set Environment Variables
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: us-east1
+          DEPLOYMENT_GROUP: streamlit-group
+        run: |
+          TEMPLATE_NAME="streamlit-template-$(date +%s)"
+          echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
+          echo "DEPLOYMENT_GROUP=$DEPLOYMENT_GROUP" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Create Instance Template
+        run: |
+          gcloud compute instance-templates create ${{ env.TEMPLATE_NAME }} \
+            --machine-type=e2-standard-2 \
+            --region=${{ env.GCP_REGION }} \
+            --network=default \
+            --image-family=debian-11 \
+            --image-project=debian-cloud \
+            --boot-disk-size=20GB \
+            --boot-disk-type=pd-standard \
+            --metadata=startup-script='#! /bin/bash
+            
+            # Install Docker and required tools
+            sudo apt-get update
+            sudo apt-get install -y git docker.io
+            sudo systemctl start docker
+
+            # Clone the repository
+            git clone https://github.com/MLOps-Group-8/clima-smart.git /opt/clima-smart
+            cd /opt/clima-smart/streamlit
+
+            # Set up Google Cloud credentials
+            echo "Exporting GOOGLE_APPLICATION_CREDENTIALS..."
+            sudo mkdir -p /config
+            sudo gsutil cp gs://clima-smart-secrets/key.json /config/key.json
+            if [ ! -f /config/key.json ]; then
+              echo "Error: key.json file not found. Exiting."
+              exit 1
+            fi
+            sudo chmod 600 /config/key.json
+
+            # Build and run the Docker container
+            sudo docker build -t streamlit-app .
+            sudo docker run -p 8501:8501 \
+              -v /config:/config \
+              -e GOOGLE_APPLICATION_CREDENTIALS=/config/key.json \
+              streamlit-app'
+            
+      - name: Create or Update Managed Instance Group
+        run: |
+          # Check if the instance group already exists
+          INSTANCE_GROUP_EXISTS=$(gcloud compute instance-groups managed list \
+            --filter="name=${{ env.DEPLOYMENT_GROUP }}" \
+            --zones=us-east1-b --format="value(name)" | grep -w ${{ env.DEPLOYMENT_GROUP }} || echo "")
+          
+          if [ -z "$INSTANCE_GROUP_EXISTS" ]; then
+            echo "Creating managed instance group..."
+            gcloud compute instance-groups managed create ${{ env.DEPLOYMENT_GROUP }} \
+              --base-instance-name=streamlit-instance \
+              --template=${{ env.TEMPLATE_NAME }} \
+              --size=1 \
+              --zone=us-east1-b
+          else
+            echo "Managed instance group already exists. Performing rolling update..."
+            gcloud compute instance-groups managed rolling-action start-update ${{ env.DEPLOYMENT_GROUP }} \
+              --version=template=${{ env.TEMPLATE_NAME }} \
+              --zone=us-east1-b
+          fi
+                
+      - name: Set up Health Checks
+        run: |
+          gcloud compute health-checks create http streamlit-health-check \
+            --request-path="/" \
+            --port=8501 \
+            --check-interval=10s \
+            --timeout=5s \
+            --unhealthy-threshold=3 \
+            --healthy-threshold=2 || echo "Health check already exists."
+
+      - name: Attach Health Check to Instance Group
+        run: |
+          gcloud compute instance-groups managed set-named-ports ${{ env.DEPLOYMENT_GROUP }} \
+            --named-ports=http:8501 \
+            --zone=us-east1-b
+
+      - name: Create Backend Service
+        run: |
+          gcloud compute backend-services create streamlit-backend \
+            --protocol=HTTP \
+            --health-checks=streamlit-health-check \
+            --port-name=http \
+            --global || echo "Backend service already exists."
+
+      - name: Add Instance Group to Backend Service
+        run: |
+          gcloud compute backend-services add-backend streamlit-backend \
+            --instance-group=${{ env.DEPLOYMENT_GROUP }} \
+            --instance-group-zone=us-east1-b \
+            --global || echo "Instance group already attached."
+
+      - name: Create URL Map
+        run: |
+          gcloud compute url-maps create streamlit-url-map \
+            --default-service=streamlit-backend || echo "URL map already exists."
+
+      - name: Create HTTP Proxy
+        run: |
+          gcloud compute target-http-proxies create streamlit-http-proxy \
+            --url-map=streamlit-url-map || echo "HTTP proxy already exists."
+
+      - name: Reserve Global Static IP
+        run: |
+          gcloud compute addresses create streamlit-ip \
+            --ip-version=IPV4 \
+            --global || echo "Static IP already reserved."
+
+      - name: Create Global Forwarding Rule
+        run: |
+          gcloud compute forwarding-rules create streamlit-rule \
+            --address=streamlit-ip \
+            --global \
+            --target-http-proxy=streamlit-http-proxy \
+            --ports=80 || echo "Forwarding rule already exists."
+
+      - name: Verify Deployment
+        run: |
+          echo "Starting deployment verification..."
+          EXTERNAL_IP=$(gcloud compute forwarding-rules describe streamlit-rule \
+            --global \
+            --format="value(IPAddress)")
+          if [ -z "$EXTERNAL_IP" ]; then
+            echo "Failed to retrieve external IP. Exiting."
+            exit 1
+          fi
+          echo "External IP: $EXTERNAL_IP"
+          for i in {1..30}; do
+            HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" "http://$EXTERNAL_IP")
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "Deployment successful! Application is reachable at http://$EXTERNAL_IP"
+              exit 0
+            else
+              echo "Application not ready. HTTP status: $HTTP_STATUS. Retrying..."
+              sleep 10
+            fi
+          done
+          echo "Deployment verification failed."
+          exit 1

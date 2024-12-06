@@ -8,3 +8,10 @@ retry-requests
 matplotlib
 seaborn
 numpy
+tensorflow
+scikit-learn
+xgboost
+mlflow
+hyperopt
+shap
+fairlearn
