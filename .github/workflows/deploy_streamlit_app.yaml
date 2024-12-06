@@ -1,0 +1,139 @@
+name: Deploy Streamlit to GCP Managed Instance
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy Streamlit App to GCP Managed Instance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set Environment Variables
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: us-east1
+        run: |
+          IMAGE_NAME="gcr.io/$GCP_PROJECT_ID/streamlit-app:latest"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $IMAGE_NAME ./streamlit
+          docker push $IMAGE_NAME
+
+      - name: Create Instance Template with Monitoring
+        run: |
+          gcloud compute instance-templates create streamlit-template \
+            --machine-type=e2-standard-2 \
+            --region=$GCP_REGION \
+            --network=default \
+            --image-family=debian-11 \
+            --image-project=debian-cloud \
+            --boot-disk-size=20GB \
+            --boot-disk-type=pd-standard \
+            --metadata=startup-script='#! /bin/bash
+            # Install Docker
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            sudo systemctl start docker
+            
+            # Install Google Cloud Ops Agent for Monitoring and Logging
+            curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+            sudo bash add-google-cloud-ops-agent-repo.sh --also-install
+            sudo systemctl restart google-cloud-ops-agent
+
+            # Set up application-specific monitoring configuration
+            sudo tee /etc/google-cloud-ops-agent/config.yaml > /dev/null <<EOF
+            logging:
+              receivers:
+                streamlit_logs:
+                  type: files
+                  include_paths:
+                    - /var/log/docker.log
+                    - /var/lib/docker/containers/*/*.log
+              service:
+                pipelines:
+                  default_pipeline:
+                    receivers: [streamlit_logs]
+            metrics:
+              receivers:
+                host_metrics:
+                  type: hostmetrics
+              service:
+                pipelines:
+                  default_pipeline:
+                    receivers: [host_metrics]
+            EOF
+            sudo systemctl restart google-cloud-ops-agent
+
+            # Run the Streamlit app container
+            echo "export GOOGLE_APPLICATION_CREDENTIALS=/config/key.json" >> ~/.bashrc
+            sudo mkdir -p /config
+            sudo gsutil cp gs://clima-smart-secrets/key.json /config/key.json
+            sudo docker run -d -p 8501:8501 \
+              -v /config:/config \
+              -e GOOGLE_APPLICATION_CREDENTIALS=/config/key.json \
+              $IMAGE_NAME'
+            
+      - name: Create Instance Group and Load Balancer
+        run: |
+          # Create a managed instance group
+          gcloud compute instance-groups managed create streamlit-group \
+            --base-instance-name=streamlit-instance \
+            --template=streamlit-template \
+            --size=1 \
+            --zone=us-east1-b
+
+          # Set up health checks
+          gcloud compute health-checks create tcp streamlit-health-check \
+            --port=8501
+
+          # Attach health checks to instance group
+          gcloud compute instance-groups managed set-named-ports streamlit-group \
+            --named-ports=http:8501 --zone=us-east1-b
+
+          # Create a backend service
+          gcloud compute backend-services create streamlit-backend \
+            --protocol=HTTP \
+            --health-checks=streamlit-health-check \
+            --port-name=http \
+            --global
+
+          # Add the instance group to the backend service
+          gcloud compute backend-services add-backend streamlit-backend \
+            --instance-group=streamlit-group \
+            --instance-group-zone=us-east1-b \
+            --global
+
+          # Create a URL map
+          gcloud compute url-maps create streamlit-url-map \
+            --default-service=streamlit-backend
+
+          # Create a target HTTP proxy
+          gcloud compute target-http-proxies create streamlit-http-proxy \
+            --url-map=streamlit-url-map
+
+          # Reserve a global static IP address
+          gcloud compute addresses create streamlit-ip \
+            --ip-version=IPV4 \
+            --global
+
+          # Create a global forwarding rule
+          gcloud compute forwarding-rules create streamlit-rule \
+            --address=streamlit-ip \
+            --global \
+            --target-http-proxy=streamlit-http-proxy \
+            --ports=80

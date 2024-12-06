@@ -1,0 +1,139 @@
+name: Deploy Airflow to GCP VM
+
+on:
+  push:
+    branches:
+      - model-deployment-ds
+
+jobs:
+  deploy:
+    name: Build and Deploy to GCP VM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Environment Variables
+        id: vars
+        env:
+          GCP_ZONE: us-east1-b
+        run: |
+          # Generate a unique name for the new VM
+          NEW_VM_NAME="airflow-$(date +%Y%m%d%H%M%S)"
+          echo "NEW_VM_NAME=$NEW_VM_NAME" >> $GITHUB_ENV
+          echo "NEW_VM_NAME=$NEW_VM_NAME"
+          echo "::set-output name=new_vm_name::$NEW_VM_NAME"
+
+      - name: Configure GCloud Auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Create New VM
+        run: |
+          gcloud config set compute/zone us-east1-b
+          gcloud compute instances create ${{ env.NEW_VM_NAME }} \
+            --machine-type=e2-standard-2 \
+            --boot-disk-size=50GB \
+            --boot-disk-type=pd-standard \
+            --image-family=ubuntu-2004-lts \
+            --image-project=ubuntu-os-cloud \
+            --tags=http-server \
+            --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/logging.write
+
+      - name: Install or Upgrade Google Cloud Ops Agent
+        run: |
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
+            # Download and install the Google Cloud Ops Agent
+            curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh &&
+            sudo bash add-google-cloud-ops-agent-repo.sh --also-install &&
+            sudo systemctl restart google-cloud-ops-agent &&
+            echo 'Ops Agent installed and started successfully.'
+          "
+
+      - name: Configure Firewall Rules
+        run: |
+          gcloud compute firewall-rules create allow-airflow \
+            --allow tcp:8080 \
+            --description="Allow incoming traffic on TCP port 8080" \
+            --direction=INGRESS \
+            --target-tags=http-server || echo "Airflow firewall rule already exists"
+
+          gcloud compute firewall-rules create allow-mlflow \
+            --allow tcp:5000 \
+            --description="Allow incoming traffic on TCP port 5000" \
+            --direction=INGRESS \
+            --target-tags=http-server || echo "Mlflow firewall rule already exists"
+
+      - name: Run Deployment Commands on VM
+        run: |
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
+            # Install Docker
+            curl -fsSL https://get.docker.com -o get-docker.sh &&
+            sudo sh get-docker.sh &&
+            sudo systemctl start docker &&
+            sudo systemctl enable docker &&
+            
+            # Clone the repository
+            git clone https://github.com/MLOps-Group-8/clima-smart.git &&
+            cd clima-smart &&
+
+            # Set permissions (777 all can read/write/execute vs 755 only owner can write/execute)
+            sudo mkdir -p ./plugins ./config &&
+            sudo chmod -R 777 ./scripts ./dags ./logs ./plugins ./config &&
+
+            # Download key.json from GCS
+            gsutil cp gs://clima-smart-secrets/key.json ./config/key.json &&
+            
+            # Verify key.json
+            ls -l ./config/key.json || echo 'key.json not found' &&
+            
+            # Build and deploy Docker containers
+            sudo docker compose build &&
+            sudo docker compose up airflow-init &&
+            sudo docker compose up -d
+          "
+
+      - name: Configure Google Cloud Ops Agent for Airflow
+        run: |
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
+            sudo tee /etc/google-cloud-ops-agent/config.yaml > /dev/null <<EOF
+            logging:
+              receivers:
+                airflow_logs:
+                  type: files
+                  include_paths:
+                    - /path/to/your/airflow/logs/*.log
+              service:
+                pipelines:
+                  default_pipeline:
+                    receivers: [airflow_logs]
+            metrics:
+              receivers:
+                airflow_metrics:
+                  type: hostmetrics
+              service:
+                pipelines:
+                  default_pipeline:
+                    receivers: [airflow_metrics]
+            EOF
+            sudo systemctl restart google-cloud-ops-agent &&
+            echo 'Ops Agent configured for Airflow and restarted.'
+          "
+          
+      - name: Verify Deployment
+        run: |
+          gcloud compute ssh ${{ env.NEW_VM_NAME }} --zone=us-east1-b --command "
+            curl -I http://localhost:8080 || echo 'Deployment verification failed'
+          "
+
+      - name: Delete Previous VM
+        if: success()
+        run: |
+          OLD_VM_NAME=$(gcloud compute instances list --filter="name ~ '^airflow-' AND name!='$NEW_VM_NAME'" --format="value(name)" | head -n 1)
+          if [ -n "$OLD_VM_NAME" ]; then
+            gcloud compute instances delete "$OLD_VM_NAME" --zone=us-east1-b --quiet || echo "Failed to delete old VM: $OLD_VM_NAME"
+          else
+            echo "No previous VM found to delete."
+          fi
+

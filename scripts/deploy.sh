@@ -73,6 +73,19 @@ else
     exit 1
 fi
 
+
+# Stop existing services
+echo "Stopping existing services if running..."
+if sudo docker compose ps | grep -q "Up"; then
+    echo "Services are running. Stopping them now..."
+    sudo docker compose down || {
+        echo "Failed to stop running containers. Exiting."
+        exit 1
+    }
+else
+    echo "No running services found."
+fi
+
 # Clean up unused Docker resources
 echo "Pruning unused Docker resources..."
 sudo docker system prune -af --volumes
