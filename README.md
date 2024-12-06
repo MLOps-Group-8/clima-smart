@@ -416,18 +416,6 @@ The target variable is temperature_2m, while the predictors include other meteor
 Prerequisites
 Python 3.x
 Libraries: xgboost, pandas, numpy, matplotlib, scikit-learn
-Installation
-
-Clone this repository:
-bash
-Copy code
-git clone https://github.com/your-username/xgboost-weather-prediction.git
-cd xgboost-weather-prediction
-
-Install dependencies:
-bash
-Copy code
-pip install -r requirements.txt
 
 The XGBoost model achieves high accuracy with minimal computational overhead compared to deep learning models.
 
