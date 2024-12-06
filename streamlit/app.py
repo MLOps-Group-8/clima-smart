@@ -45,8 +45,8 @@ def main():
 
     # Sidebar Configuration
     st.sidebar.header("Configuration")
-    model_path = st.sidebar.text_input("Model Path in GCS", "/assets/daily_models/daily_best_model.json")
-    csv_file_path = st.sidebar.text_input("CSV Path in GCS", "/weather-data/engineered_daily_data.csv")
+    model_path = st.sidebar.text_input("Model Path in GCS", "assets/daily_models/daily_best_model.json")
+    csv_file_path = st.sidebar.text_input("CSV Path in GCS", "weather_data/engineered_daily_data.csv")
 
     try:
         # Fetch and load model
