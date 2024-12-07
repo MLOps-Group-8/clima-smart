@@ -1,7 +1,7 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import mean_squared_error
 import os
 import logging
 
@@ -11,20 +11,12 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def train_and_save_models(data_path, model_dir, target_features):
+def train_and_save_models(data_path, model_dir, date_features, target_features):
     """
     Train XGBoost models for multiple target features and save them.
     """
     logging.info(f"Loading data from {data_path}...")
     data = pd.read_csv(data_path)
-    data['date'] = pd.to_datetime(data['date'])
-    
-    # Feature engineering
-    data['month'] = data['date'].dt.month
-    data['day_of_year'] = data['date'].dt.day_of_year
-    data['week_of_year'] = data['date'].dt.isocalendar().week
-    data['is_weekend'] = data['date'].dt.weekday >= 5
-    date_features = ['month', 'day_of_year', 'week_of_year', 'is_weekend']
     
     # Ensure the model directory exists
     os.makedirs(model_dir, exist_ok=True)
@@ -44,7 +36,7 @@ def train_and_save_models(data_path, model_dir, target_features):
         
         # Evaluate model
         y_pred = model.predict(X_test)
-        rmse = root_mean_squared_error(y_test, y_pred, squared=False)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         logging.info(f"{target} - RMSE: {rmse}")
         
         # Save model

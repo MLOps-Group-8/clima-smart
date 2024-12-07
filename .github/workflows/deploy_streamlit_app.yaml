@@ -3,7 +3,7 @@ name: Deploy Streamlit to GCP Managed Instance
 on:
   push:
     branches:
-      - main
+      - model-deployment-ds
 
 jobs:
   deploy:
@@ -68,7 +68,7 @@ jobs:
             sudo systemctl start docker
 
             # Clone the repository
-            git clone https://github.com/MLOps-Group-8/clima-smart.git /opt/clima-smart
+            git clone -b model-deployment-ds https://github.com/MLOps-Group-8/clima-smart.git /opt/clima-smart
             cd /opt/clima-smart/streamlit
 
             # Set up Google Cloud credentials
