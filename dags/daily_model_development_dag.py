@@ -6,8 +6,10 @@ import os
 import logging
 from daily_model_training_v2 import train_and_save_models, load_models, predict_features
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from daily_model_analysis import bias_analysis, sensitivity_analysis
 import pandas as pd
 from constants import *
+from utils import upload_to_gcs
 
 # Configure logging
 logging.basicConfig(
@@ -39,7 +41,9 @@ dag = DAG(
 # Configuration
 LOCAL_TRAIN_FILE = '/tmp/daily_weather_data.csv'
 MODEL_DIR = '/tmp/models/daily'
+ANALYSIS_DIR = '/tmp/analysis/daily'
 TARGET_FEATURES = ['apparent_temperature_max']
+DATE_FEATURES = ['month', 'day_of_year', 'week_of_year', 'is_weekend']
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}  
 
 def update_train_file():
@@ -84,6 +88,29 @@ def upload_models_to_gcs():
     except Exception as e:
         logging.error(f"Error uploading models to GCS: {e}")
         raise
+
+def perform_bias_analysis():
+    """Perform bias analysis and upload results to GCS."""
+    data = pd.read_csv(LOCAL_TRAIN_FILE)
+    models = load_models(MODEL_DIR, TARGET_FEATURES)
+    bias_results = bias_analysis(models, data, DATE_FEATURES, TARGET_FEATURES, ANALYSIS_DIR)
+
+    # Upload bias plots to GCS
+    for target in TARGET_FEATURES:
+        plot_path = os.path.join(ANALYSIS_DIR, f"{target}_bias_plot.png")
+        upload_to_gcs(BUCKET_NAME, plot_path, f"analysis/daily/bias/{target}_bias_plot.png")
+
+def perform_sensitivity_analysis():
+    """Perform sensitivity analysis and upload results to GCS."""
+    data = pd.read_csv(LOCAL_TRAIN_FILE)
+    models = load_models(MODEL_DIR, TARGET_FEATURES)
+    sensitivity_results = sensitivity_analysis(models, data, DATE_FEATURES, TARGET_FEATURES, ANALYSIS_DIR)
+
+    # Upload sensitivity results to GCS
+    for target in TARGET_FEATURES:
+        csv_path = os.path.join(ANALYSIS_DIR, f"{target}_sensitivity.csv")
+        upload_to_gcs(BUCKET_NAME, csv_path, f"analysis/daily/sensitivity/{target}_sensitivity.csv")
+
 
 def predict_for_today():
     """Predict weather features for today using trained models."""
@@ -168,6 +195,16 @@ upload_models_task = PythonOperator(
     dag=dag,
 )
 
+bias_analysis_task = PythonOperator(
+        task_id='perform_bias_analysis',
+        python_callable=perform_bias_analysis,
+    )
+
+sensitivity_analysis_task = PythonOperator(
+    task_id='perform_sensitivity_analysis',
+    python_callable=perform_sensitivity_analysis,
+)
+
 predict_for_today_task = PythonOperator(
     task_id='predict_for_today',
     python_callable=predict_for_today,
@@ -181,4 +218,4 @@ monitor_model_performance_task = PythonOperator(
 )
 
 # Define task dependencies
-update_train_file_task >> train_models_task >> upload_models_task >> predict_for_today_task >> monitor_model_performance_task
+update_train_file_task >> train_models_task >> upload_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> predict_for_today_task >> monitor_model_performance_task

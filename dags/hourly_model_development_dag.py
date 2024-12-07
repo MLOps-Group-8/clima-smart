@@ -7,6 +7,8 @@ import pandas as pd
 from hourly_model_training_v2 import train_and_save_models, monitor_model_performance, load_models
 import logging
 from constants import *
+from utils import upload_to_gcs
+from hourly_model_analysis import bias_analysis, sensitivity_analysis
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +41,8 @@ dag = DAG(
 LOCAL_HOURLY_FILE = '/tmp/weather_data_engineered_hourly_data.csv'
 MODEL_DIR = '/tmp/models/hourly'
 TARGET_FEATURES = ['apparent_temperature', 'precipitation', 'rain']
+DATE_FEATURES = ['hour', 'month', 'day_of_year', 'week_of_year', 'is_weekend']
+ANALYSIS_DIR = '/tmp/analysis/hourly'
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
 
 def download_hourly_data():
@@ -76,6 +80,29 @@ def upload_hourly_models():
         blob.upload_from_filename(model_path)
         logging.info(f"Uploaded {model_path} to {remote_path}")
 
+def perform_bias_analysis():
+    """Perform bias analysis for hourly data and upload results to GCS."""
+    data = pd.read_csv(LOCAL_HOURLY_FILE)
+    models = load_models(MODEL_DIR, TARGET_FEATURES)
+    bias_results = bias_analysis(models, data, DATE_FEATURES, TARGET_FEATURES, ANALYSIS_DIR)
+
+    # Upload bias plots to GCS
+    for target in TARGET_FEATURES:
+        plot_path = os.path.join(ANALYSIS_DIR, f"{target}_hourly_bias_plot.png")
+        upload_to_gcs(BUCKET_NAME, plot_path, f"analysis/hourly/bias/{target}_hourly_bias_plot.png")
+
+def perform_sensitivity_analysis():
+    """Perform sensitivity analysis for hourly data and upload results to GCS."""
+    data = pd.read_csv(LOCAL_HOURLY_FILE)
+    models = load_models(MODEL_DIR, TARGET_FEATURES)
+    sensitivity_results = sensitivity_analysis(models, data, DATE_FEATURES, TARGET_FEATURES, ANALYSIS_DIR)
+
+    # Upload sensitivity results to GCS
+    for target in TARGET_FEATURES:
+        csv_path = os.path.join(ANALYSIS_DIR, f"{target}_hourly_sensitivity.csv")
+        upload_to_gcs(BUCKET_NAME, csv_path, f"analysis/hourly/sensitivity/{target}_hourly_sensitivity.csv")
+
+
 def monitor_hourly_models():
     """Monitor the performance of hourly models."""
     models = load_models(MODEL_DIR, TARGET_FEATURES)
@@ -104,6 +131,16 @@ train_hourly_models_task = PythonOperator(
     dag=dag,
 )
 
+bias_analysis_task = PythonOperator(
+    task_id='perform_hourly_bias_analysis',
+    python_callable=perform_bias_analysis,
+)
+
+sensitivity_analysis_task = PythonOperator(
+    task_id='perform_hourly_sensitivity_analysis',
+    python_callable=perform_sensitivity_analysis,
+)
+
 upload_hourly_models_task = PythonOperator(
     task_id='upload_hourly_models',
     python_callable=upload_hourly_models,
@@ -117,4 +154,4 @@ monitor_hourly_models_task = PythonOperator(
 )
 
 # Define task dependencies
-download_hourly_data_task >> train_hourly_models_task >> upload_hourly_models_task >> monitor_hourly_models_task
+download_hourly_data_task >> train_hourly_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> upload_hourly_models_task >> monitor_hourly_models_task

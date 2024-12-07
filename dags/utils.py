@@ -97,3 +97,17 @@ def save_model_to_gcs(model, bucket_name, file_name):
     # Upload the pickle object to GCS
     blob.upload_from_file(output, content_type='application/octet-stream')
     logging.info(f"Model successfully saved to GCS: gs://{bucket_name}/{file_name}")
+
+def upload_to_gcs(bucket_name, source_path, destination_blob):
+    """
+    Upload files to Google Cloud Storage.
+    """
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(destination_blob)
+        blob.upload_from_filename(source_path)
+        logging.info(f"Uploaded {source_path} to {bucket_name}/{destination_blob}")
+    except Exception as e:
+        logging.error(f"Error uploading {source_path} to GCS: {e}")
+        raise
