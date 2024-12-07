@@ -54,6 +54,15 @@ def update_train_file():
         bucket = storage_client.bucket(BUCKET_NAME)
         blob = bucket.blob(ENGINEERED_DAILY_DATA_PATH)
         blob.download_to_filename(LOCAL_TRAIN_FILE)
+
+        data = pd.read_csv(LOCAL_TRAIN_FILE)
+        data['date'] = pd.to_datetime(data['date'])
+        data['month'] = data['date'].dt.month
+        data['day_of_year'] = data['date'].dt.day_of_year
+        data['week_of_year'] = data['date'].dt.isocalendar().week
+        data['is_weekend'] = data['date'].dt.weekday >= 5
+        data.to_csv(LOCAL_TRAIN_FILE, index=False)  # Save prepared file
+        
         logging.info(f"Daily training file saved to {LOCAL_TRAIN_FILE}")
     except Exception as e:
         logging.error(f"Failed to download daily training file: {e}")
