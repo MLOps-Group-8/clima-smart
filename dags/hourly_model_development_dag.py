@@ -26,7 +26,7 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    dag_id='weather_forecasting_hourly_training_pipeline',
+    dag_id='hourly_model_development_pipeline',
     default_args=default_args,
     description='Pipeline for training, monitoring, and retraining models for hourly weather data',
     schedule_interval='@daily',
