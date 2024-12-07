@@ -13,7 +13,7 @@ DATE_FEATURES_DAILY = ["month", "day_of_year", "week_of_year", "is_weekend"]
 DATE_FEATURES_HOURLY = ["hour", "month", "day_of_year", "week_of_year", "is_weekend"]
 
 # Target features
-TARGET_FEATURES_DAILY = ['apparent_temperature_max', 'precipitation_intensity', 'rain_sum']
+TARGET_FEATURES_DAILY = ['apparent_temperature_max']
 TARGET_FEATURES_HOURLY = ['apparent_temperature', 'precipitation', 'rain']
 
 # Load Models from GCS
