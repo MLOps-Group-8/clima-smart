@@ -38,7 +38,7 @@ dag = DAG(
 # Configuration
 LOCAL_HOURLY_FILE = '/tmp/weather_data_engineered_hourly_data.csv'
 MODEL_DIR = '/tmp/hourly_models'
-TARGET_FEATURES = ['apparent_temperature_max', 'humidity', 'wind_speed']
+TARGET_FEATURES = ['apparent_temperature', 'precipitation', 'rain']
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
 
 def download_hourly_data():
@@ -49,7 +49,7 @@ def download_hourly_data():
     blob.download_to_filename(LOCAL_HOURLY_FILE)
 
     data = pd.read_csv(LOCAL_HOURLY_FILE)
-    data['date'] = pd.to_datetime(data['date'])
+    data['date'] = pd.to_datetime(data['datetime'])
     data['hour'] = data['date'].dt.hour
     data['month'] = data['date'].dt.month
     data['day_of_year'] = data['date'].dt.day_of_year

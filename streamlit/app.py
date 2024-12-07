@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import xgboost as xgb
 from google.cloud import storage
 from datetime import datetime, timedelta
@@ -12,6 +11,10 @@ MODEL_DIR_DAILY = "models/daily/"
 MODEL_DIR_HOURLY = "models/hourly/"
 DATE_FEATURES_DAILY = ["month", "day_of_year", "week_of_year", "is_weekend"]
 DATE_FEATURES_HOURLY = ["hour", "month", "day_of_year", "week_of_year", "is_weekend"]
+
+# Target features
+TARGET_FEATURES_DAILY = ['apparent_temperature_max', 'precipitation_intensity', 'rain_sum']
+TARGET_FEATURES_HOURLY = ['apparent_temperature', 'precipitation', 'rain']
 
 # Load Models from GCS
 @st.cache_resource
@@ -34,7 +37,7 @@ def load_models(model_dir, target_features):
     return models
 
 # Generate Daily Predictions
-def predict_daily_weather(models, target_features):
+def predict_daily_weather(models):
     """Generate 7-day daily weather predictions."""
     today = datetime.now().date()
     future_dates = [today + timedelta(days=i) for i in range(7)]
@@ -47,17 +50,16 @@ def predict_daily_weather(models, target_features):
     })
 
     predictions = {}
-    for target in target_features:
+    for target in TARGET_FEATURES_DAILY:
         predictions[target] = models[target].predict(data[DATE_FEATURES_DAILY])
 
-    data["Apparent Temperature (°C)"] = predictions["apparent_temperature_max"]
-    data["Humidity (%)"] = predictions["humidity"]
-    data["Wind Speed (m/s)"] = predictions["wind_speed"]
+    for target in TARGET_FEATURES_DAILY:
+        data[target] = predictions[target]
 
     return data
 
 # Generate Hourly Predictions
-def predict_hourly_weather(models, date, target_features):
+def predict_hourly_weather(models, date):
     """Generate hourly weather predictions for a specific date."""
     date = pd.to_datetime(date)
     data = pd.DataFrame({
@@ -69,27 +71,25 @@ def predict_hourly_weather(models, date, target_features):
     })
 
     predictions = {}
-    for target in target_features:
+    for target in TARGET_FEATURES_HOURLY:
         predictions[target] = models[target].predict(data[DATE_FEATURES_HOURLY])
 
-    data["Apparent Temperature (°C)"] = predictions["apparent_temperature_max"]
-    data["Humidity (%)"] = predictions["humidity"]
-    data["Wind Speed (m/s)"] = predictions["wind_speed"]
+    for target in TARGET_FEATURES_HOURLY:
+        data[target] = predictions[target]
 
     return data
 
 # Streamlit UI
 def main():
     # App title
-    st.title("Interactive Weather Forecasting Application")
+    st.title("Weather Forecasting Application")
     st.write("Select a day for daily predictions or click on a date to view hourly forecasts.")
 
     # Load models
-    target_features = ["apparent_temperature_max", "humidity", "wind_speed"]
     st.sidebar.header("Model Information")
     st.sidebar.write("Loading models from Google Cloud Storage...")
-    daily_models = load_models(MODEL_DIR_DAILY, target_features)
-    hourly_models = load_models(MODEL_DIR_HOURLY, target_features)
+    daily_models = load_models(MODEL_DIR_DAILY, TARGET_FEATURES_DAILY)
+    hourly_models = load_models(MODEL_DIR_HOURLY, TARGET_FEATURES_HOURLY)
     st.sidebar.success("Models Loaded Successfully!")
 
     # Date selector for daily predictions
@@ -100,7 +100,7 @@ def main():
     # Daily Forecast
     if selected_date:
         st.write(f"### Daily Weather Forecast for the Next 7 Days")
-        daily_predictions = predict_daily_weather(daily_models, target_features)
+        daily_predictions = predict_daily_weather(daily_models)
 
         # Highlight selected date
         daily_predictions["Selected"] = daily_predictions["date"] == pd.Timestamp(selected_date)
@@ -112,9 +112,8 @@ def main():
         # Plot daily predictions
         st.write("#### Interactive 7-Day Weather Chart")
         fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(daily_predictions["date"], daily_predictions["Apparent Temperature (°C)"], label="Temperature (°C)", marker="o")
-        ax.plot(daily_predictions["date"], daily_predictions["Humidity (%)"], label="Humidity (%)", marker="s")
-        ax.plot(daily_predictions["date"], daily_predictions["Wind Speed (m/s)"], label="Wind Speed (m/s)", marker="^")
+        for target in TARGET_FEATURES_DAILY:
+            ax.plot(daily_predictions["date"], daily_predictions[target], label=target, marker="o")
         ax.set_title("7-Day Weather Forecast")
         ax.set_xlabel("Date")
         ax.set_ylabel("Values")
@@ -125,7 +124,7 @@ def main():
         # Hourly Forecast for Selected Date
         if daily_predictions["Selected"].any():
             st.write(f"### Hourly Predictions for {selected_date}")
-            hourly_predictions = predict_hourly_weather(hourly_models, selected_date, target_features)
+            hourly_predictions = predict_hourly_weather(hourly_models, selected_date)
 
             # Display hourly predictions
             st.write("#### Hourly Predictions")
@@ -134,9 +133,8 @@ def main():
             # Plot hourly predictions
             st.write("#### Interactive Hourly Weather Chart")
             fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(hourly_predictions["hour"], hourly_predictions["Apparent Temperature (°C)"], label="Temperature (°C)", marker="o")
-            ax.plot(hourly_predictions["hour"], hourly_predictions["Humidity (%)"], label="Humidity (%)", marker="s")
-            ax.plot(hourly_predictions["hour"], hourly_predictions["Wind Speed (m/s)"], label="Wind Speed (m/s)", marker="^")
+            for target in TARGET_FEATURES_HOURLY:
+                ax.plot(hourly_predictions["hour"], hourly_predictions[target], label=target, marker="o")
             ax.set_title(f"Hourly Weather Forecast for {selected_date}")
             ax.set_xlabel("Hour")
             ax.set_ylabel("Values")
