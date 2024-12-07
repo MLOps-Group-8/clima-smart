@@ -88,7 +88,7 @@ def perform_bias_analysis():
 
     # Upload bias plots to GCS
     for target in TARGET_FEATURES:
-        plot_path = os.path.join(ANALYSIS_DIR, f"{target}_hourly_bias_plot.png")
+        plot_path = os.path.join(ANALYSIS_DIR, f"{target}_bias_plot.png")
         upload_to_gcs(BUCKET_NAME, plot_path, f"analysis/hourly/bias/{target}_bias_plot.png")
 
 def perform_sensitivity_analysis():
@@ -99,7 +99,7 @@ def perform_sensitivity_analysis():
 
     # Upload sensitivity results to GCS
     for target in TARGET_FEATURES:
-        csv_path = os.path.join(ANALYSIS_DIR, f"{target}_hourly_sensitivity.csv")
+        csv_path = os.path.join(ANALYSIS_DIR, f"{target}_sensitivity.csv")
         upload_to_gcs(BUCKET_NAME, csv_path, f"analysis/hourly/sensitivity/{target}_sensitivity.csv")
 
 

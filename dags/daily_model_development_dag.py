@@ -75,6 +75,7 @@ def train_models():
         train_and_save_models(
             data_path=LOCAL_TRAIN_FILE,
             model_dir=MODEL_DIR,
+            date_features=DATE_FEATURES,
             target_features=TARGET_FEATURES
         )
         logging.info("Model training completed.")
