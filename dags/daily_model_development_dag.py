@@ -76,7 +76,7 @@ def upload_models_to_gcs():
         storage_client = storage.Client()
         for target in TARGET_FEATURES:
             local_model_path = os.path.join(MODEL_DIR, f"{target}_model.json")
-            remote_model_path = f"models/{target}_model.json"
+            remote_model_path = f"models/daily/{target}_model.json"
             bucket = storage_client.bucket(BUCKET_NAME)
             blob = bucket.blob(remote_model_path)
             blob.upload_from_filename(local_model_path)
@@ -153,26 +153,31 @@ def monitor_model_performance():
 update_train_file_task = PythonOperator(
     task_id='update_train_file',
     python_callable=update_train_file,
+    dag=dag,
 )
 
 train_models_task = PythonOperator(
     task_id='train_models',
     python_callable=train_models,
+    dag=dag,
 )
 
 upload_models_task = PythonOperator(
     task_id='upload_models_to_gcs',
     python_callable=upload_models_to_gcs,
+    dag=dag,
 )
 
 predict_for_today_task = PythonOperator(
     task_id='predict_for_today',
     python_callable=predict_for_today,
+    dag=dag,
 )
 
 monitor_model_performance_task = PythonOperator(
     task_id='monitor_model_performance',
     python_callable=monitor_model_performance,
+    dag=dag,
 )
 
 # Define task dependencies
