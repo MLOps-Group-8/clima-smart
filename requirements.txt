@@ -9,7 +9,7 @@ matplotlib
 seaborn
 numpy
 tensorflow
-scikit-learn=1.4.0
+scikit-learn
 xgboost
 mlflow
 hyperopt

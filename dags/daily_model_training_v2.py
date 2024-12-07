@@ -1,7 +1,7 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import mean_squared_error
 import os
 import logging
 
@@ -44,7 +44,7 @@ def train_and_save_models(data_path, model_dir, target_features):
         
         # Evaluate model
         y_pred = model.predict(X_test)
-        rmse = root_mean_squared_error(y_test, y_pred, squared=False)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         logging.info(f"{target} - RMSE: {rmse}")
         
         # Save model

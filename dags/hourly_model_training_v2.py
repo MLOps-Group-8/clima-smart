@@ -1,7 +1,7 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import os
 import logging
 
@@ -65,7 +65,7 @@ def monitor_model_performance(models, data_path, target_features, thresholds):
         y_pred = models[target].predict(X)
 
         # Calculate metrics
-        rmse = root_mean_squared_error(y_actual, y_pred, squared=False)
+        rmse = mean_squared_error(y_actual, y_pred, squared=False)
         r2 = r2_score(y_actual, y_pred)
         performance_metrics[target] = {'rmse': rmse, 'r2': r2}
 

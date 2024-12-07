@@ -5,7 +5,7 @@ from google.cloud import storage
 import os
 import logging
 from daily_model_training_v2 import train_and_save_models, load_models, predict_features
-from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import pandas as pd
 from constants import *
 
@@ -30,10 +30,10 @@ dag = DAG(
     dag_id='daily_model_development_pipeline',
     default_args=default_args,
     description='Automates training, prediction, monitoring, and retraining for weather forecasting',
-    schedule_interval='@daily',
+    schedule_interval='none',
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=['weather', 'forecasting'],
+    tags=['weather', 'forecasting', 'daily'],
 )
 
 # Configuration
@@ -123,7 +123,7 @@ def monitor_model_performance():
             y_pred = models[target].predict(X)
 
             # Calculate metrics
-            rmse = root_mean_squared_error(y_actual, y_pred, squared=False)
+            rmse = mean_squared_error(y_actual, y_pred, squared=False)
             mae = mean_absolute_error(y_actual, y_pred)
             r2 = r2_score(y_actual, y_pred)
             performance_metrics[target] = {'rmse': rmse, 'mae': mae, 'r2': r2}

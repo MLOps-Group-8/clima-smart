@@ -21,7 +21,8 @@ default_args = {
 
 dag = DAG('weather_forecasting_pipeline', default_args=default_args, 
           description = 'DAG to collect, preprocess, analyze and develope models for weather data', 
-          schedule_interval=None,
+          schedule_interval='@daily',
+          tags=['weather', 'forecasting'],
           catchup=False)
 
 start_task = BashOperator(
@@ -36,17 +37,6 @@ daily_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
     trigger_dag_id='daily_weather_data_pipeline',  # Replace with your daily data pipeline DAG ID
     reset_dag_run=True,
     wait_for_completion=True,
-    dag=dag,
-)
-
-# Wait for daily model development to complete
-wait_for_daily_model_development = ExternalTaskSensor(
-    task_id='wait_for_daily_model_development',
-    external_dag_id='daily_weather_model_development_pipeline_v2',  # Replace with your daily model development DAG ID
-    external_task_id=None,
-    timeout=600,
-    poke_interval=30,
-    mode='poke',
     dag=dag,
 )
 
@@ -70,6 +60,5 @@ email_notification_task = EmailOperator(
 
 # Define dependencies
 start_task >> daily_weather_data_forecasting_trigger_task
-daily_weather_data_forecasting_trigger_task >> wait_for_daily_model_development
-wait_for_daily_model_development >> hourly_weather_data_forecasting_trigger_task
+daily_weather_data_forecasting_trigger_task >> hourly_weather_data_forecasting_trigger_task
 hourly_weather_data_forecasting_trigger_task >> email_notification_task
