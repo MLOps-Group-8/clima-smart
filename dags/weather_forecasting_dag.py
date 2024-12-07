@@ -34,25 +34,21 @@ start_task = BashOperator(
 # Trigger daily data collection DAG
 daily_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
     task_id='daily_weather_data_forecasting_trigger_task',
-    trigger_dag_id='daily_weather_data_pipeline',  # Replace with your daily data pipeline DAG ID
-    reset_dag_run=True,
-    wait_for_completion=True,
+    trigger_dag_id='daily_weather_data_pipeline', 
     dag=dag,
 )
 
 # Trigger hourly tasks
 hourly_weather_data_forecasting_trigger_task = TriggerDagRunOperator(
     task_id='hourly_weather_data_forecasting_trigger_task',
-    trigger_dag_id='hourly_weather_data_pipeline',  # Replace with your hourly data pipeline DAG ID
-    reset_dag_run=True,
-    wait_for_completion=True,
+    trigger_dag_id='hourly_weather_data_pipeline', 
     dag=dag,
 )
 
 # Final notification
 email_notification_task = EmailOperator(
     task_id='email_notification_task',
-    to='keshiarun01@gmail.com',  # Replace with the recipient's email address
+    to='keshiarun01@gmail.com', 
     subject='Weather Forecasting Pipeline Completed',
     html_content='<p>The Weather Forecasting Pipeline has completed successfully.</p>',
     dag=dag,
