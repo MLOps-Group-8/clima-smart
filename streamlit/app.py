@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import xgboost as xgb
 from google.cloud import storage
 from datetime import datetime, timedelta
@@ -12,9 +13,20 @@ MODEL_DIR_HOURLY = "models/hourly/"
 DATE_FEATURES_DAILY = ["month", "day_of_year", "week_of_year", "is_weekend"]
 DATE_FEATURES_HOURLY = ["hour", "month", "day_of_year", "week_of_year", "is_weekend"]
 
-# Target features
-TARGET_FEATURES_DAILY = ['apparent_temperature_max']
-TARGET_FEATURES_HOURLY = ['apparent_temperature', 'precipitation', 'rain']
+# Target features with min and max values
+TARGET_FEATURES_DAILY = {
+    'apparent_temperature_max': {'min': -10, 'max': 40}, 
+}
+TARGET_FEATURES_HOURLY = {
+    'apparent_temperature': {'min': -10, 'max': 40}, 
+    'precipitation': {'min': 0, 'max': 10},
+    'rain': {'min': 0, 'max': 20},
+}
+
+# Reverse normalization function
+def reverse_normalization(value, min_val, max_val):
+    """Reverse normalization to get the original scale."""
+    return (value * (max_val - min_val)) + min_val
 
 # Load Models from GCS
 @st.cache_resource
@@ -50,8 +62,11 @@ def predict_daily_weather(models):
     })
 
     predictions = {}
-    for target in TARGET_FEATURES_DAILY:
-        predictions[target] = models[target].predict(data[DATE_FEATURES_DAILY])
+    for target, limits in TARGET_FEATURES_DAILY.items():
+        normalized_preds = models[target].predict(data[DATE_FEATURES_DAILY])
+        predictions[target] = [
+            reverse_normalization(value, limits['min'], limits['max']) for value in normalized_preds
+        ]
 
     for target in TARGET_FEATURES_DAILY:
         data[target] = predictions[target]
@@ -71,8 +86,11 @@ def predict_hourly_weather(models, date):
     })
 
     predictions = {}
-    for target in TARGET_FEATURES_HOURLY:
-        predictions[target] = models[target].predict(data[DATE_FEATURES_HOURLY])
+    for target, limits in TARGET_FEATURES_HOURLY.items():
+        normalized_preds = models[target].predict(data[DATE_FEATURES_HOURLY])
+        predictions[target] = [
+            reverse_normalization(value, limits['min'], limits['max']) for value in normalized_preds
+        ]
 
     for target in TARGET_FEATURES_HOURLY:
         data[target] = predictions[target]
@@ -82,14 +100,14 @@ def predict_hourly_weather(models, date):
 # Streamlit UI
 def main():
     # App title
-    st.title("Weather Forecasting Application")
+    st.title("Interactive Weather Forecasting Application")
     st.write("Select a day for daily predictions or click on a date to view hourly forecasts.")
 
     # Load models
     st.sidebar.header("Model Information")
     st.sidebar.write("Loading models from Google Cloud Storage...")
-    daily_models = load_models(MODEL_DIR_DAILY, TARGET_FEATURES_DAILY)
-    hourly_models = load_models(MODEL_DIR_HOURLY, TARGET_FEATURES_HOURLY)
+    daily_models = load_models(MODEL_DIR_DAILY, TARGET_FEATURES_DAILY.keys())
+    hourly_models = load_models(MODEL_DIR_HOURLY, TARGET_FEATURES_HOURLY.keys())
     st.sidebar.success("Models Loaded Successfully!")
 
     # Date selector for daily predictions
@@ -98,49 +116,48 @@ def main():
     selected_date = st.date_input("Select a date:", min_value=today, max_value=today + timedelta(days=6))
 
     # Daily Forecast
-    if selected_date:
-        st.write(f"### Daily Weather Forecast for the Next 7 Days")
-        daily_predictions = predict_daily_weather(daily_models)
+    st.write("### Daily Weather Forecast")
+    daily_predictions = predict_daily_weather(daily_models)
 
-        # Highlight selected date
-        daily_predictions["Selected"] = daily_predictions["date"] == pd.Timestamp(selected_date)
+    # Highlight selected date
+    daily_predictions["Selected"] = daily_predictions["date"] == pd.Timestamp(selected_date)
 
-        # Display predictions in a table
-        st.write("#### Daily Predictions")
-        st.dataframe(daily_predictions)
+    # Display predictions in a table
+    st.write("#### Daily Predictions")
+    st.dataframe(daily_predictions)
 
-        # Plot daily predictions
-        st.write("#### Interactive 7-Day Weather Chart")
+    # Plot daily predictions
+    st.write("#### Interactive 7-Day Weather Chart")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    for target in TARGET_FEATURES_DAILY:
+        ax.plot(daily_predictions["date"], daily_predictions[target], label=target, marker="o")
+    ax.set_title("7-Day Weather Forecast")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Values")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+    # Hourly Forecast for Selected Date
+    if st.button(f"View Hourly Predictions for {selected_date}"):
+        st.write(f"### Hourly Predictions for {selected_date}")
+        hourly_predictions = predict_hourly_weather(hourly_models, selected_date)
+
+        # Display hourly predictions
+        st.write("#### Hourly Predictions")
+        st.dataframe(hourly_predictions)
+
+        # Plot hourly predictions
+        st.write("#### Interactive Hourly Weather Chart")
         fig, ax = plt.subplots(figsize=(12, 6))
-        for target in TARGET_FEATURES_DAILY:
-            ax.plot(daily_predictions["date"], daily_predictions[target], label=target, marker="o")
-        ax.set_title("7-Day Weather Forecast")
-        ax.set_xlabel("Date")
+        for target in TARGET_FEATURES_HOURLY:
+            ax.plot(hourly_predictions["hour"], hourly_predictions[target], label=target, marker="o")
+        ax.set_title(f"Hourly Weather Forecast for {selected_date}")
+        ax.set_xlabel("Hour")
         ax.set_ylabel("Values")
         ax.legend()
         ax.grid(True)
         st.pyplot(fig)
-
-        # Hourly Forecast for Selected Date
-        if daily_predictions["Selected"].any():
-            st.write(f"### Hourly Predictions for {selected_date}")
-            hourly_predictions = predict_hourly_weather(hourly_models, selected_date)
-
-            # Display hourly predictions
-            st.write("#### Hourly Predictions")
-            st.dataframe(hourly_predictions)
-
-            # Plot hourly predictions
-            st.write("#### Interactive Hourly Weather Chart")
-            fig, ax = plt.subplots(figsize=(12, 6))
-            for target in TARGET_FEATURES_HOURLY:
-                ax.plot(hourly_predictions["hour"], hourly_predictions[target], label=target, marker="o")
-            ax.set_title(f"Hourly Weather Forecast for {selected_date}")
-            ax.set_xlabel("Hour")
-            ax.set_ylabel("Values")
-            ax.legend()
-            ax.grid(True)
-            st.pyplot(fig)
 
 if __name__ == "__main__":
     main()
