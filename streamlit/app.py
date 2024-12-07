@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 # Configure GCS
 BUCKET_NAME = "clima-smart-data-collection"
+DAILY_DATA_PATH = 'weather_data/daily_weather_data.csv'
+HOURLY_DATA_PATH = 'weather_data/hourly_weather_data.csv'
 MODEL_DIR_DAILY = "models/daily/"
 MODEL_DIR_HOURLY = "models/hourly/"
 DATE_FEATURES_DAILY = ["month", "day_of_year", "week_of_year", "is_weekend"]
@@ -15,13 +17,34 @@ DATE_FEATURES_HOURLY = ["hour", "month", "day_of_year", "week_of_year", "is_week
 
 # Target features with min and max values
 TARGET_FEATURES_DAILY = {
-    'apparent_temperature_max': {'min': -10, 'max': 40}, 
+    'apparent_temperature_max': {'min': -10, 'max': 40},
 }
 TARGET_FEATURES_HOURLY = {
-    'apparent_temperature': {'min': -10, 'max': 40}, 
+    'apparent_temperature': {'min': -10, 'max': 40},
     'precipitation': {'min': 0, 'max': 10},
     'rain': {'min': 0, 'max': 20},
 }
+
+# Fetch min and max values for normalization
+@st.cache_resource
+def get_min_max(file_path):
+    """Fetch min and max values for specific target columns from a CSV file stored in GCS."""
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    blob = bucket.blob(file_path)
+    local_path = f"/tmp/{file_path.split('/')[-1]}"
+    blob.download_to_filename(local_path)
+
+    data = pd.read_csv(local_path)
+    min_max = {}
+    for column in TARGET_FEATURES_DAILY.keys() | TARGET_FEATURES_HOURLY.keys():
+        if column in data.columns:
+            min_max[column] = {'min': data[column].min(), 'max': data[column].max()}
+    return min_max
+
+# Fetch min/max for daily and hourly data
+MIN_MAX_DAILY = get_min_max(DAILY_DATA_PATH)
+MIN_MAX_HOURLY = get_min_max(HOURLY_DATA_PATH)
 
 # Reverse normalization function
 def reverse_normalization(value, min_val, max_val):
@@ -30,13 +53,13 @@ def reverse_normalization(value, min_val, max_val):
 
 # Load Models from GCS
 @st.cache_resource
-def load_models(model_dir, target_features):
+def load_models(model_dir, _target_features):
     """Load XGBoost models from Google Cloud Storage."""
     storage_client = storage.Client()
     bucket = storage_client.bucket(BUCKET_NAME)
     models = {}
 
-    for target in target_features:
+    for target in _target_features:
         model_path = f"{model_dir}{target}_model.json"
         local_model_path = f"/tmp/{target}_model.json"
         blob = bucket.blob(model_path)
@@ -62,14 +85,18 @@ def predict_daily_weather(models):
     })
 
     predictions = {}
-    for target, limits in TARGET_FEATURES_DAILY.items():
+    for target, limits in MIN_MAX_DAILY.items():
         normalized_preds = models[target].predict(data[DATE_FEATURES_DAILY])
         predictions[target] = [
             reverse_normalization(value, limits['min'], limits['max']) for value in normalized_preds
         ]
 
-    for target in TARGET_FEATURES_DAILY:
+    for target in MIN_MAX_DAILY:
         data[target] = predictions[target]
+
+    # Convert apparent_temperature_max to Fahrenheit
+    if 'apparent_temperature_max' in data:
+        data['apparent_temperature_max'] = data['apparent_temperature_max'] * 1.8 + 32
 
     return data
 
@@ -86,13 +113,13 @@ def predict_hourly_weather(models, date):
     })
 
     predictions = {}
-    for target, limits in TARGET_FEATURES_HOURLY.items():
+    for target, limits in MIN_MAX_HOURLY.items():
         normalized_preds = models[target].predict(data[DATE_FEATURES_HOURLY])
         predictions[target] = [
             reverse_normalization(value, limits['min'], limits['max']) for value in normalized_preds
         ]
 
-    for target in TARGET_FEATURES_HOURLY:
+    for target in MIN_MAX_HOURLY:
         data[target] = predictions[target]
 
     return data
@@ -106,8 +133,8 @@ def main():
     # Load models
     st.sidebar.header("Model Information")
     st.sidebar.write("Loading models from Google Cloud Storage...")
-    daily_models = load_models(MODEL_DIR_DAILY, TARGET_FEATURES_DAILY.keys())
-    hourly_models = load_models(MODEL_DIR_HOURLY, TARGET_FEATURES_HOURLY.keys())
+    daily_models = load_models(MODEL_DIR_DAILY, list(MIN_MAX_DAILY.keys()))
+    hourly_models = load_models(MODEL_DIR_HOURLY, list(MIN_MAX_HOURLY.keys()))
     st.sidebar.success("Models Loaded Successfully!")
 
     # Date selector for daily predictions
@@ -129,7 +156,7 @@ def main():
     # Plot daily predictions
     st.write("#### Interactive 7-Day Weather Chart")
     fig, ax = plt.subplots(figsize=(12, 6))
-    for target in TARGET_FEATURES_DAILY:
+    for target in MIN_MAX_DAILY:
         ax.plot(daily_predictions["date"], daily_predictions[target], label=target, marker="o")
     ax.set_title("7-Day Weather Forecast")
     ax.set_xlabel("Date")
@@ -150,7 +177,7 @@ def main():
         # Plot hourly predictions
         st.write("#### Interactive Hourly Weather Chart")
         fig, ax = plt.subplots(figsize=(12, 6))
-        for target in TARGET_FEATURES_HOURLY:
+        for target in MIN_MAX_HOURLY:
             ax.plot(hourly_predictions["hour"], hourly_predictions[target], label=target, marker="o")
         ax.set_title(f"Hourly Weather Forecast for {selected_date}")
         ax.set_xlabel("Hour")
