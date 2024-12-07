@@ -41,7 +41,7 @@ def train_and_save_models(data_path, model_dir, target_features):
         logging.info(f"{target} - RMSE: {rmse}, MAE: {mae}, R²: {r2}")
 
         # Save model
-        model_path = os.path.join(model_dir, f"{target}_hourly_model.json")
+        model_path = os.path.join(model_dir, f"{target}_model.json")
         model.save_model(model_path)
         logging.info(f"Saved model for {target} at {model_path}")
         models[target] = model

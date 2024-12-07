@@ -37,7 +37,7 @@ dag = DAG(
 
 # Configuration
 LOCAL_HOURLY_FILE = '/tmp/weather_data_engineered_hourly_data.csv'
-MODEL_DIR = '/tmp/hourly_models'
+MODEL_DIR = '/tmp/models/hourly'
 TARGET_FEATURES = ['apparent_temperature', 'precipitation', 'rain']
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
 
@@ -69,8 +69,8 @@ def upload_hourly_models():
     """Upload trained hourly models to GCS."""
     storage_client = storage.Client()
     for target in TARGET_FEATURES:
-        model_path = os.path.join(MODEL_DIR, f"{target}_hourly_model.json")
-        remote_path = f"models/hourly/{target}_hourly_model.json"
+        model_path = os.path.join(MODEL_DIR, f"{target}_model.json")
+        remote_path = f"models/hourly/{target}_model.json"
         bucket = storage_client.bucket(BUCKET_NAME)
         blob = bucket.blob(remote_path)
         blob.upload_from_filename(model_path)

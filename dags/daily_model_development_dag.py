@@ -38,8 +38,8 @@ dag = DAG(
 
 # Configuration
 LOCAL_TRAIN_FILE = '/tmp/daily_weather_data.csv'
-MODEL_DIR = '/tmp/models'
-TARGET_FEATURES = ['apparent_temperature_max', 'precipitation_intensity', 'rain_sum']
+MODEL_DIR = '/tmp/models/daily'
+TARGET_FEATURES = ['apparent_temperature_max']
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}  
 
 def update_train_file():
