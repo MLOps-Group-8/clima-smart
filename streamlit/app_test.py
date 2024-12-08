@@ -2,112 +2,154 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 import xgboost as xgb
-import tempfile
 
-# Mocking Streamlit components
-import streamlit as st
+# Import functions to test
+from app import (
+    get_min_max,
+    load_models,
+    predict_daily_weather,
+    predict_hourly_weather,
+    reverse_normalization,
+)
+
 
 class TestWeatherForecastApp(unittest.TestCase):
 
-    @patch('streamlit.sidebar.text_input')
-    @patch('streamlit.sidebar.info')
-    @patch('streamlit.sidebar.success')
-    @patch('streamlit.subheader')
-    @patch('streamlit.dataframe')
-    @patch('streamlit.table')
-    @patch('streamlit.line_chart')
-    @patch('google.cloud.storage.Client')
-    def test_fetch_data_from_gcs(self, mock_client, mock_line_chart, mock_table, mock_dataframe,
-                                  mock_subheader, mock_success, mock_info, mock_text_input):
-        """Test if data fetching from GCS works correctly."""
-        # Mock the storage client
+    # Test: Fetch min and max values from GCS
+    @patch("google.cloud.storage.Client")
+    def test_get_min_max(self, mock_client):
+        mock_data = pd.DataFrame({'apparent_temperature_max': [10, 20, 30]})
         mock_blob = MagicMock()
         mock_bucket = MagicMock()
         mock_client.return_value.bucket.return_value = mock_bucket
         mock_bucket.blob.return_value = mock_blob
 
         # Mock file download
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        temp_file.write(b"temperature_2m_max,temperature_2m_min,apparent_temperature_min,rain_sum,showers_sum,daylight_duration\n20,10,15,2,1,10")
-        temp_file.close()
-        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, 'wb').write(
-            open(temp_file.name, 'rb').read()
-        )
+        mock_blob.download_to_filename.side_effect = lambda filename: mock_data.to_csv(filename, index=False)
 
-        # Call the function
-        from main import fetch_data_from_gcs
-        data = fetch_data_from_gcs("mock_bucket", "mock_path")
-        self.assertIsInstance(data, pd.DataFrame)
-        self.assertEqual(len(data), 1)  # Check if the data has the expected number of rows
+        result = get_min_max("mock_path")
+        self.assertEqual(result['apparent_temperature_max']['min'], 10)
+        self.assertEqual(result['apparent_temperature_max']['max'], 30)
 
-    @patch('google.cloud.storage.Client')
-    def test_load_model_from_gcs(self, mock_client):
-        """Test if model loading from GCS works correctly."""
-        # Mock the storage client
+    # Test: Load XGBoost models from GCS
+    @patch("google.cloud.storage.Client")
+    def test_load_models(self, mock_client):
         mock_blob = MagicMock()
         mock_bucket = MagicMock()
         mock_client.return_value.bucket.return_value = mock_bucket
         mock_bucket.blob.return_value = mock_blob
 
-        # Mock file download
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        temp_file.write(b"xgboost model binary content")
-        temp_file.close()
-        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, 'wb').write(
-            open(temp_file.name, 'rb').read()
-        )
+        # Mock model download
+        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, "w").write("model content")
 
-        # Call the function
-        from main import load_model_from_gcs
-        model = load_model_from_gcs("mock_bucket", "mock_model_path")
-        self.assertIsInstance(model, xgb.Booster)
+        models = load_models("mock_dir", ["apparent_temperature_max"])
+        self.assertIsInstance(models["apparent_temperature_max"], xgb.XGBRegressor)
 
-    @patch('streamlit.sidebar.text_input')
-    @patch('streamlit.sidebar.info')
-    @patch('streamlit.sidebar.success')
-    @patch('streamlit.dataframe')
-    @patch('streamlit.table')
-    @patch('streamlit.line_chart')
-    @patch('google.cloud.storage.Client')
-    def test_app_run(self, mock_client, mock_line_chart, mock_table, mock_dataframe,
-                     mock_success, mock_info, mock_text_input):
-        """Test the app's execution."""
-        # Mock Streamlit inputs
-        mock_text_input.side_effect = ["mock_model_path", "mock_csv_path"]
+    # Test: Reverse normalization function
+    def test_reverse_normalization(self):
+        result = reverse_normalization(0.5, 10, 20)
+        self.assertEqual(result, 15)
 
-        # Mock GCS data fetching
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-        temp_file.write(b"temperature_2m_max,temperature_2m_min,apparent_temperature_min,rain_sum,showers_sum,daylight_duration\n20,10,15,2,1,10")
-        temp_file.close()
+    # Test: Daily weather predictions
+    @patch("main.MIN_MAX_DAILY", {"apparent_temperature_max": {"min": -10, "max": 40}})
+    @patch("main.reverse_normalization")
+    def test_predict_daily_weather(self, mock_reverse_normalization):
+        mock_reverse_normalization.side_effect = lambda val, min_val, max_val: val * (max_val - min_val) + min_val
+        mock_models = {"apparent_temperature_max": MagicMock()}
+        mock_models["apparent_temperature_max"].predict.return_value = [0.2, 0.4, 0.6, 0.8, 1.0]
+
+        result = predict_daily_weather(mock_models)
+        self.assertEqual(len(result), 7)
+        self.assertIn("apparent_temperature_max", result.columns)
+
+    # Test: Hourly weather predictions
+    @patch("main.MIN_MAX_HOURLY", {"apparent_temperature": {"min": -10, "max": 40}})
+    @patch("main.reverse_normalization")
+    def test_predict_hourly_weather(self, mock_reverse_normalization):
+        mock_reverse_normalization.side_effect = lambda val, min_val, max_val: val * (max_val - min_val) + min_val
+        mock_models = {"apparent_temperature": MagicMock()}
+        mock_models["apparent_temperature"].predict.return_value = [0.1] * 24
+
+        date = datetime.now().date()
+        result = predict_hourly_weather(mock_models, date)
+        self.assertEqual(len(result), 24)
+        self.assertIn("apparent_temperature", result.columns)
+
+    # Test: Daily UI rendering
+    @patch("main.predict_daily_weather")
+    @patch("streamlit.date_input")
+    @patch("streamlit.dataframe")
+    @patch("streamlit.pyplot")
+    def test_daily_ui(self, mock_pyplot, mock_dataframe, mock_date_input, mock_predict_daily_weather):
+        mock_date_input.return_value = datetime.now().date()
+        mock_predict_daily_weather.return_value = pd.DataFrame({
+            "date": [datetime.now().date() + timedelta(days=i) for i in range(7)],
+            "apparent_temperature_max": [30, 32, 31, 33, 34, 35, 36],
+        })
+
+        from main import main
+        main()
+
+        mock_date_input.assert_called()
+        mock_dataframe.assert_called()
+        mock_pyplot.assert_called()
+
+    # Test: Hourly UI rendering
+    @patch("main.predict_hourly_weather")
+    @patch("streamlit.dataframe")
+    @patch("streamlit.pyplot")
+    @patch("streamlit.button")
+    def test_hourly_ui(self, mock_button, mock_pyplot, mock_dataframe, mock_predict_hourly_weather):
+        mock_button.return_value = True
+        mock_predict_hourly_weather.return_value = pd.DataFrame({
+            "hour": list(range(24)),
+            "apparent_temperature": [30] * 24,
+        })
+
+        from main import main
+        main()
+
+        mock_button.assert_called()
+        mock_dataframe.assert_called()
+        mock_pyplot.assert_called()
+
+    # Test: Handle no data in GCS
+    @patch("google.cloud.storage.Client")
+    def test_no_data(self, mock_client):
         mock_blob = MagicMock()
         mock_bucket = MagicMock()
         mock_client.return_value.bucket.return_value = mock_bucket
         mock_bucket.blob.return_value = mock_blob
-        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, 'wb').write(
-            open(temp_file.name, 'rb').read()
-        )
 
-        # Mock GCS model fetching
-        model_temp_file = tempfile.NamedTemporaryFile(delete=False)
-        model_temp_file.write(b"xgboost model binary content")
-        model_temp_file.close()
-        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, 'wb').write(
-            open(model_temp_file.name, 'rb').read()
-        )
+        # Simulate empty file download
+        mock_blob.download_to_filename.side_effect = lambda filename: open(filename, "w").write("")
 
-        # Mock the XGBoost model
-        mock_model = MagicMock()
-        mock_model.predict.return_value = np.array([30.0, 32.0, 31.5])
+        with self.assertRaises(Exception):
+            get_min_max("mock_path")
 
-        with patch('main.load_model_from_gcs', return_value=mock_model):
-            from main import main
-            main()
+    # Test: Invalid date input
+    @patch("streamlit.date_input")
+    def test_invalid_date(self, mock_date_input):
+        mock_date_input.return_value = datetime.now().date() - timedelta(days=1)
 
-        # Assertions to ensure correct outputs
-        mock_dataframe.assert_called()  # Ensure data display is called
-        mock_table.assert_called()      # Ensure table with predictions is shown
-        mock_line_chart.assert_called() # Ensure chart with predictions is plotted
+        from main import main
+        main()
 
-if __name__ == '__main__':
+        mock_date_input.assert_called()
+
+    # Test: Model prediction failures
+    @patch("main.predict_daily_weather")
+    @patch("streamlit.error")
+    def test_model_prediction_failures(self, mock_error, mock_predict_daily_weather):
+        mock_predict_daily_weather.side_effect = Exception("Prediction failed")
+
+        from main import main
+        main()
+
+        mock_error.assert_called_with("An error occurred during prediction: Prediction failed")
+
+
+if __name__ == "__main__":
     unittest.main()

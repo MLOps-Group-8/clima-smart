@@ -3,7 +3,7 @@ name: Deploy Airflow to GCP VM
 on:
   push:
     branches:
-      - model-deployment-ds
+      - main
 
 jobs:
   deploy:
@@ -75,7 +75,7 @@ jobs:
             sudo systemctl enable docker &&
             
             # Clone the repository
-            git clone -b model-deployment-ds https://github.com/MLOps-Group-8/clima-smart.git &&
+            git clone https://github.com/MLOps-Group-8/clima-smart.git &&
             cd clima-smart &&
 
             # Set permissions (777 all can read/write/execute vs 755 only owner can write/execute)

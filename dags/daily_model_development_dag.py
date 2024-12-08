@@ -7,6 +7,7 @@ import logging
 from daily_model_training_v2 import train_and_save_models, load_models, predict_features
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from daily_model_analysis import bias_analysis, sensitivity_analysis
+from airflow.operators.email import EmailOperator
 import pandas as pd
 from constants import *
 from utils import upload_to_gcs
@@ -45,6 +46,38 @@ ANALYSIS_DIR = '/tmp/analysis/daily'
 TARGET_FEATURES = ['apparent_temperature_max']
 DATE_FEATURES = ['month', 'day_of_year', 'week_of_year', 'is_weekend']
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}  
+
+# Define function to notify failure or sucess via an email
+def notify_success(context):
+    success_email = EmailOperator(
+        task_id='success_email',
+        to='keshiarun01@gmail.com',
+        subject='Success Notification from Airflow',
+        html_content='<p>The task succeeded.</p>',
+        dag=context['dag']
+    )
+    success_email.execute(context=context)
+
+def notify_failure(context):
+    failure_email = EmailOperator(
+        task_id='failure_email',
+        to='keshiarun01@gmail.com',
+        subject='Failure Notification from Airflow',
+        html_content='<p>The task failed.</p>',
+        dag=context['dag']
+    )
+    failure_email.execute(context=context)
+
+# Define function to notify failure or sucess via an email
+def notify_model_retraining(context):
+    retraining_success_email = EmailOperator(
+        task_id='retraining_email',
+        to='keshiarun01@gmail.com',
+        subject='Model Retraining Notification from Airflow',
+        html_content='<p>Retraining is completed and new model is deployed for the daily model</p>',
+        dag=context['dag']
+    )
+    retraining_success_email.execute(context=context)
 
 def update_train_file():
     """Download the daily training file from GCS."""
@@ -178,6 +211,7 @@ def monitor_model_performance():
             logging.info("Performance degraded. Triggering retraining...")
             train_models()
             upload_models_to_gcs()
+            notify_model_retraining()
             logging.info("Retraining completed.")
         else:
             logging.info("Model performance is within acceptable limits.")
@@ -190,42 +224,51 @@ def monitor_model_performance():
 update_train_file_task = PythonOperator(
     task_id='update_train_file',
     python_callable=update_train_file,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 train_models_task = PythonOperator(
     task_id='train_models',
     python_callable=train_models,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 upload_models_task = PythonOperator(
     task_id='upload_models_to_gcs',
     python_callable=upload_models_to_gcs,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 bias_analysis_task = PythonOperator(
-        task_id='perform_bias_analysis',
-        python_callable=perform_bias_analysis,
-    )
+    task_id='perform_bias_analysis',
+    python_callable=perform_bias_analysis,
+    on_failure_callback=notify_failure,
+    dag=dag,
+)
 
 sensitivity_analysis_task = PythonOperator(
     task_id='perform_sensitivity_analysis',
     python_callable=perform_sensitivity_analysis,
+    on_failure_callback=notify_failure,
+    dag=dag
 )
 
 predict_for_today_task = PythonOperator(
     task_id='predict_for_today',
     python_callable=predict_for_today,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 monitor_model_performance_task = PythonOperator(
     task_id='monitor_model_performance',
     python_callable=monitor_model_performance,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 # Define task dependencies
-update_train_file_task >> train_models_task >> upload_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> predict_for_today_task >> monitor_model_performance_task
+update_train_file_task >> train_models_task >> upload_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> predict_for_today_task >> monitor_model_performance_task >> notify_success
