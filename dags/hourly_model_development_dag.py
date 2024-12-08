@@ -9,6 +9,7 @@ import logging
 from constants import *
 from utils import upload_to_gcs
 from hourly_model_analysis import bias_analysis, sensitivity_analysis
+from airflow.operators.email import EmailOperator
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +45,39 @@ TARGET_FEATURES = ['apparent_temperature', 'precipitation', 'rain']
 DATE_FEATURES = ['hour', 'month', 'day_of_year', 'week_of_year', 'is_weekend']
 ANALYSIS_DIR = '/tmp/analysis/hourly'
 METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
+
+# Define function to notify failure or sucess via an email
+def notify_success(context):
+    success_email = EmailOperator(
+        task_id='success_email',
+        to='keshiarun01@gmail.com',
+        subject='Success Notification from Airflow',
+        html_content='<p>The task succeeded.</p>',
+        dag=context['dag']
+    )
+    success_email.execute(context=context)
+
+def notify_failure(context):
+    failure_email = EmailOperator(
+        task_id='failure_email',
+        to='keshiarun01@gmail.com',
+        subject='Failure Notification from Airflow',
+        html_content='<p>The task failed.</p>',
+        dag=context['dag']
+    )
+    failure_email.execute(context=context)
+
+# Define function to notify failure or sucess via an email
+def notify_model_retraining(context):
+    retraining_success_email = EmailOperator(
+        task_id='retraining_email',
+        to='keshiarun01@gmail.com',
+        subject='Model Retraining Notification from Airflow',
+        html_content='<p>Retraining is completed and new model is deployed for the hourly model</p>',
+        dag=context['dag']
+    )
+    retraining_success_email.execute(context=context)
+
 
 def download_hourly_data():
     """Download hourly training data from GCS."""
@@ -117,39 +151,48 @@ def monitor_hourly_models():
         logging.info("Retraining triggered due to performance degradation.")
         train_hourly_models()
         upload_hourly_models()
+        notify_model_retraining()
 
 # Define tasks
 download_hourly_data_task = PythonOperator(
     task_id='download_hourly_data',
     python_callable=download_hourly_data,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 train_hourly_models_task = PythonOperator(
     task_id='train_hourly_models',
     python_callable=train_hourly_models,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 bias_analysis_task = PythonOperator(
     task_id='perform_hourly_bias_analysis',
     python_callable=perform_bias_analysis,
+    on_failure_callback=notify_failure,
+    dag=dag,
 )
 
 sensitivity_analysis_task = PythonOperator(
     task_id='perform_hourly_sensitivity_analysis',
     python_callable=perform_sensitivity_analysis,
+    on_failure_callback=notify_failure,
+    dag=dag,
 )
 
 upload_hourly_models_task = PythonOperator(
     task_id='upload_hourly_models',
     python_callable=upload_hourly_models,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
 monitor_hourly_models_task = PythonOperator(
     task_id='monitor_hourly_models',
     python_callable=monitor_hourly_models,
+    on_failure_callback=notify_failure,
     dag=dag,
 )
 
