@@ -36,9 +36,11 @@ TARGET_FEATURES_HOURLY = {
     'rain': {'min': 0, 'max': 20},
 }
 
-# Function to generate clothing recommendations using OpenAI API
 def get_clothing_recommendations(weather_data):
-    """Generate clothing recommendations based on weather forecast."""
+    """
+    Generate clothing recommendations based on weather forecast.
+    Uses the ChatCompletion API with gpt-4 or gpt-3.5-turbo.
+    """
     prompt = (
         f"The following is a 7-day weather forecast:\n"
         f"{weather_data[['date', 'apparent_temperature_max']].to_string(index=False)}\n"
@@ -48,13 +50,16 @@ def get_clothing_recommendations(weather_data):
     )
 
     try:
-        response = openai.Completion.create(
-            engine="gpt-4o-mini",
-            prompt=prompt,
-            max_tokens=350,
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",  # Change to "gpt-3.5-turbo" for a cheaper alternative
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that provides weather-based clothing advice."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=250,
             temperature=0.7,
         )
-        return response.choices[0].text.strip()
+        return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"Error generating recommendations: {e}"
 
@@ -205,7 +210,7 @@ def main():
         st.dataframe(hourly_predictions)
 
         # Plot hourly predictions
-        st.write("#### Interactive Hourly Weather Chart")
+        st.write("#### Hourly Weather Chart")
         fig, ax = plt.subplots(figsize=(12, 6))
         for target in MIN_MAX_HOURLY:
             ax.plot(hourly_predictions["hour"], hourly_predictions[target], label=target, marker="o")
