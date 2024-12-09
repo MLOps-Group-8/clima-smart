@@ -5,8 +5,6 @@ import xgboost as xgb
 from google.cloud import storage
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
-import openai
-from google.cloud import storage
 
 # Configure GCS
 BUCKET_NAME = "clima-smart-data-collection"
@@ -17,15 +15,6 @@ MODEL_DIR_HOURLY = "models/hourly/"
 DATE_FEATURES_DAILY = ["month", "day_of_year", "week_of_year", "is_weekend"]
 DATE_FEATURES_HOURLY = ["hour", "month", "day_of_year", "week_of_year", "is_weekend"]
 
-def get_openai_api_key_from_gcs(bucket_name, file_path):
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(file_path)
-    return blob.download_as_text()
-
-# Fetch and set the API key
-openai.api_key = get_openai_api_key_from_gcs("clima-smart-secrets", "openai_key.txt")
-
 # Target features with min and max values
 TARGET_FEATURES_DAILY = {
     'apparent_temperature_max': {'min': -10, 'max': 40},
@@ -35,29 +24,6 @@ TARGET_FEATURES_HOURLY = {
     'precipitation': {'min': 0, 'max': 10},
     'rain': {'min': 0, 'max': 20},
 }
-
-# Function to generate clothing recommendations using OpenAI API
-def get_clothing_recommendations(weather_data):
-    """Generate clothing recommendations based on weather forecast."""
-    prompt = (
-        f"The following is a 7-day weather forecast:\n"
-        f"{weather_data[['date', 'apparent_temperature_max']].to_string(index=False)}\n"
-        f"Based on this forecast, suggest appropriate clothing for each day. "
-        f"Consider the temperature range, precipitation, and the season. "
-        f"Provide concise and specific recommendations for both men and women."
-    )
-
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=350,
-            temperature=0.7,
-        )
-        return response.choices[0].text.strip()
-    except Exception as e:
-        return f"Error generating recommendations: {e}"
-
 
 # Fetch min and max values for normalization
 @st.cache_resource
@@ -215,12 +181,6 @@ def main():
         ax.legend()
         ax.grid(True)
         st.pyplot(fig)
-
-    # Clothing Recommendations Section
-    st.write("### Personalized Clothing Recommendations")
-    with st.spinner("Generating clothing recommendations..."):
-        recommendations = get_clothing_recommendations(daily_predictions)
-    st.write(recommendations)
 
 if __name__ == "__main__":
     main()
