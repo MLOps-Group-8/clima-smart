@@ -395,8 +395,6 @@ Models are monitored for performance degradation. If metrics fall below predefin
   - Monitors RMSE and R² for all targets.
   - Retrains models when performance thresholds are exceeded.
 
----
-
 ## **8. Pipeline Orchestration**
 ### Overview
 The entire workflow is automated using **Apache Airflow**, ensuring each step is executed in sequence and monitored.
@@ -442,4 +440,99 @@ Configure SMTP settings in `docker-compose.yaml` to enable email alerts.
 ## **11. Testing and Verification**
 - DAG completions are verified via email notifications.
 - Analysis outputs are stored in Google Cloud Storage for review.
+---
+
+# Model and App Deployment Details
+
+## Airflow deployment on GCP
+
+### Workflow Overview
+
+1. CI/CD Pipeline: The deployment of Apache Airflow is automated using GitHub Actions. The pipeline:
+2. Creates a new instance in GCP with the required configuration.
+3. Deploys updated code and configurations.
+4. Verifies deployment success.
+5. Removes the old instance post-deployment to save resources.
+
+
+### Configure GitHub Actions:
+
+Add a .yml file under .github/workflows/ for deployment.
+
+### Test Deployment:
+
+1. Push changes to a feature branch.
+Check GitHub Actions logs for successful deployment.
+
+![Airflow deployment](assets/screenshots/airflow-deployment-2.png)
+
+## Streamlit App Deployment
+
+### Workflow Overview
+
+1. CI/CD Pipeline: Streamlit is deployed on an instance group for load balancing.
+Uses a Streamlit-specific VM template for consistent app environments.  
+
+2. Automatically creates VMs based on the traffic load.
+
+## Steps to Replicate:
+
+Add deployment workflow in .github/workflows/deploy_streamlit_app.yaml:
+yaml
+
+![streamlit app deployment](assets/screenshots/streamlit-app-deployment.png)
+
+## Screenshots
+
+### 1. Airflow Deployment
+![Airflow Deployment](assets/screenshots/airflow-deployment-1.png)
+
+### 2. Streamlit App
+![Streamlit App 1](assets/screenshots//streamlit-app-1.png)
+
+
+![Streamlit App 2](assets/screenshots//streamlit-app-2.png)
+
+
+![Streamlit App 3](assets/screenshots//streamlit-app-3.png)
+
+
+![Streamlit App 4](assets/screenshots//streamlit-app-4.png)
+
+### 3. Cloud Monitoring Dashboard
+![Cloud Monitoring](assets/screenshots/gcp-vm-monitoring.png)
+
+### 4. GCP VM Dashboard
+![GCP VM Dashboard](assets/screenshots/gcp-vm-dashboard.png)
+
+![GCP VM observability](assets/screenshots/gcp-vm-observability.png)
+
+## Steps to Use Workflows
+
+### For Airflow Deployment:
+
+1. Push your code changes to the main or deploy branch.
+2. GitHub Actions will trigger the CI/CD workflow.
+3. Verify the new instance is created and operational in GCP.
+
+### For Streamlit Deployment:
+
+1. Push Streamlit code to the GitHub repository.
+2. The workflow triggers VM creation in the instance group.
+3. Verify the load balancer reflects the updated app version.
+4. This documentation ensures clarity for setup and troubleshooting.
+
+Here’s the cost analysis written in markdown:
+
+# **Cost Analysis**
+
+| **Resource**                  | **Cost (USD)**    |
+|--------------------------------|-------------------|
+| GCP VM Instances (3 instances) | $287.64/year      |
+| Storage (100GB/month for 3 months) | $6              |
+| API Compute Instance (Streamlit)   | $50               |
+| Streamlit Compute Instance     | $50               |
+| **Total Cost**                 | **$393.64/year**  |
+
+
 ---
