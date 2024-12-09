@@ -49,7 +49,7 @@ def get_clothing_recommendations(weather_data):
 
     try:
         response = openai.Completion.create(
-            engine="text-davinci-003",
+            engine="gpt-4o-mini",
             prompt=prompt,
             max_tokens=350,
             temperature=0.7,
