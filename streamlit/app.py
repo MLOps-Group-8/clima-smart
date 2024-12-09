@@ -227,10 +227,10 @@ def main():
         st.pyplot(fig)
 
     # # Clothing Recommendations Section
-    # st.write("### Personalized Clothing Recommendations")
-    # with st.spinner("Generating clothing recommendations..."):
-    #     recommendations = get_clothing_recommendations(daily_predictions)
-    # st.write(recommendations)
+    st.write("### Personalized Clothing Recommendations")
+    with st.spinner("Generating clothing recommendations..."):
+        recommendations = get_clothing_recommendations(daily_predictions)
+    st.write(recommendations)
 
 if __name__ == "__main__":
     main()
