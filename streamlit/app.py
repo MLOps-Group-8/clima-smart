@@ -9,9 +9,6 @@ from openai import OpenAI
 from google.cloud import storage
 import openai
 
-# Fetch and set the API key
-api_key = get_openai_api_key_from_gcs("clima-smart-secrets", "openai_key.txt")
-
 
 # Configure GCS
 BUCKET_NAME = "clima-smart-data-collection"
@@ -27,6 +24,9 @@ def get_openai_api_key_from_gcs(bucket_name, file_path):
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(file_path)
     return blob.download_as_text()
+
+# Fetch and set the API key
+api_key = get_openai_api_key_from_gcs("clima-smart-secrets", "openai_key.txt")
 
 
 # Target features with min and max values
