@@ -534,6 +534,4 @@ Here’s the cost analysis written in markdown:
 | Streamlit Compute Instance     | $50               |
 | **Total Cost**                 | **$393.64/year**  |
 
-
-
 ---
