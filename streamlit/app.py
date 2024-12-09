@@ -5,8 +5,9 @@ import xgboost as xgb
 from google.cloud import storage
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
-import openai
+from openai import OpenAI
 from google.cloud import storage
+import openai
 
 # Configure GCS
 BUCKET_NAME = "clima-smart-data-collection"
@@ -36,6 +37,8 @@ TARGET_FEATURES_HOURLY = {
     'rain': {'min': 0, 'max': 20},
 }
 
+client = OpenAI()
+
 def get_clothing_recommendations(weather_data):
     """
     Generate clothing recommendations based on weather forecast.
@@ -50,7 +53,7 @@ def get_clothing_recommendations(weather_data):
     )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",  # Change to "gpt-3.5-turbo" for a cheaper alternative
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that provides weather-based clothing advice."},
