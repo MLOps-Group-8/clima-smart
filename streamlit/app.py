@@ -140,7 +140,7 @@ def main():
     # Date selector for daily predictions
     st.write("### Select a Date for Weather Forecast")
     today = datetime.now().date()
-    selected_date = st.date_input("Select a date:", min_value=today, max_value=today + timedelta(days=6))
+    selected_date = st.date_input("Select a date:", min_value=today, max_value=today + timedelta(days=180))
 
     # Daily Forecast
     st.write("### Daily Weather Forecast")
