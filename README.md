@@ -2,8 +2,8 @@
 
 ClimaSmart is a next-generation AI-powered weather prediction system designed to provide highly accurate, real-time weather forecasts alongside personalized recommendations. The system offers features such as Weather-Based Commute Suggestions, Outdoor Adventure Recommendations, and an interactive chatbot for real-time queries about weather conditions.
 
-# Dag video  
-[Watch the dag video here](https://drive.google.com/file/d/1rTWnVMPPzCwt3mXpQYw9nYNOkf8zQafZ/view?usp=sharing)
+# Demo video  
+[Watch the demo video here](https://drive.google.com/file/d/1cXJMLj5CymdCgqnnXRIy2Dg-gLLZZ5U_/view?usp=sharing)
 
 
 ## Data Card and Dataset Information

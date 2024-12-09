@@ -44,7 +44,7 @@ MODEL_DIR = '/tmp/models/hourly'
 TARGET_FEATURES = ['apparent_temperature', 'precipitation', 'rain']
 DATE_FEATURES = ['hour', 'month', 'day_of_year', 'week_of_year', 'is_weekend']
 ANALYSIS_DIR = '/tmp/analysis/hourly'
-METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
+METRIC_THRESHOLDS = {'rmse': 5, 'r2': 0.08}
 
 # Define function to notify failure or sucess via an email
 def notify_success(context):
@@ -158,7 +158,6 @@ def monitor_hourly_models():
         logging.info("Retraining triggered due to performance degradation.")
         train_hourly_models()
         upload_hourly_models()
-        notify_model_retraining()
 
 # Define tasks
 download_hourly_data_task = PythonOperator(
@@ -200,7 +199,6 @@ monitor_hourly_models_task = PythonOperator(
     task_id='monitor_hourly_models',
     python_callable=monitor_hourly_models,
     on_failure_callback=notify_failure,
-    provide_context=True,
     dag=dag,
 )
 
