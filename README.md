@@ -57,10 +57,10 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 
 ```
 ├── LICENSE                <- Open-source license if one is chosen
-├── Makefile                    <- Makefile with convenience commands
-├── pyproject.toml              <- Project configuration and package metadata
-├── README.md                   <- The top-level README for developers using this project
-├── assets                      <- Contains subfolders for weather data, data plots, and data validation assets
+├── Makefile               <- Makefile with convenience commands
+├── pyproject.toml         <- Project configuration and package metadata
+├── README.md              <- The top-level README for developers using this project
+├── assets                 <- Contains subfolders for weather data, data plots, and data validation assets
 │   ├── weather_data
 │   │   ├── weather_data_daily_weather_data.csv
 │   │   ├── weather_data_engineered_daily_data.csv
@@ -80,60 +80,100 @@ Our dataset source is the [OpenMeteo API](https://archive-api.open-meteo.com/v1/
 │       ├── weather_data_validation_hourly_schema.pkl
 │       └── weather_data_validation_hourly_stats.pkl
 │
-├── clima_smart                 <- Core source code for the ClimaSmart project
+├── clima_smart            <- Core source code for the ClimaSmart project
 │   ├── __init__.py
-│   ├── config.py               <- Configuration variables
-│   ├── dataset.py              <- Script for data loading and generation
-│   ├── features.py             <- Script for feature engineering
+│   ├── config.py          <- Configuration variables
+│   ├── dataset.py         <- Script for data loading and generation
+│   ├── features.py        <- Script for feature engineering
 │   ├── modeling
 │   │   ├── __init__.py
-│   │   ├── predict.py          <- Model prediction script
-│   │   └── train.py            <- Model training script
-│   └── plots.py                <- Script for data visualization
+│   │   ├── predict.py     <- Model prediction script
+│   │   └── train.py       <- Model training script
+│   └── plots.py           <- Script for data visualization
 │
-├── config                      <- Configuration files, including credentials
-│   └── key.json                <- JSON key file for authentication (e.g., Google Cloud)
+├── config                 <- Configuration files, including credentials
+│   └── key.json           <- JSON key file for authentication (e.g., Google Cloud)
 │
-├── dags                        <- Directory for Airflow DAGs and utility scripts
-│   ├── constants.py            <- Defines constants used across DAGs
-│   ├── feature_engineering.py  <- Feature engineering script
-│   ├── utils.py                <- Utility functions for the DAGs
-│   ├── weather_data_collection_dag.py <- Airflow DAG for scheduling data collection
-│   ├── weather_data_collection.py     <- Script to collect weather data
-│   ├── weather_data_preprocessing.py  <- Script for data preprocessing
-│   └── weather_data_validation.py     <- Script for validating weather data
+├── dags                   <- Directory for Airflow DAGs and utility scripts
+│   ├── constants.py                          <- Defines constants used across DAGs
+│   ├── daily_model_analysis.py               <- Daily model analysis script
+│   ├── daily_model_development_dag.py        <- DAG for daily model development
+│   ├── daily_model_training_v2.py            <- Daily model training script (version 2)
+│   ├── daily_weather_data_collection_dag.py  <- DAG for daily weather data collection
+│   ├── feature_engineering.py                <- Feature engineering script
+│   ├── hourly_model_analysis.py              <- Hourly model analysis script
+│   ├── hourly_model_development_dag.py       <- DAG for hourly model development
+│   ├── hourly_model_training_v2.py           <- Hourly model training script (version 2)
+│   ├── hourly_weather_data_collection_dag.py <- DAG for hourly weather data collection
+│   ├── utils.py                              <- Utility functions for the DAGs
+│   ├── weather_data_collection.py            <- Script to collect weather data
+│   ├── weather_data_preprocessing.py         <- Script for data preprocessing
+│   ├── weather_data_validation.py            <- Script for validating weather data
+│   └── weather_forecasting_dag.py            <- DAG for weather forecasting
 │
-├── data                        <- Data folders for various stages (raw, processed, interim, external)
-│   ├── external                <- Data from third-party sources
-│   ├── interim                 <- Intermediate data that has been transformed
-│   ├── processed               <- The final, canonical data sets for modeling
-│   ├── raw                     <- The original, immutable data dump
+├── data                   <- Data folders for various stages (raw, processed, interim, external)
+│   ├── external           <- Data from third-party sources
+│   ├── interim            <- Intermediate data that has been transformed
+│   ├── processed          <- The final, canonical data sets for modeling
+│   ├── raw                <- The original, immutable data dump
 │   └── daily_weather_data.csv.dvc <- Data Version Control file for tracking raw daily data
 │
-├── docs                        <- Documentation files
+├── docs                   <- Documentation files
+├── k8s-deployment.yaml <- Kubernetes deployment configuration
+| ── k8s-service.yaml    <- Kubernetes service configuration
 │
-├── logs                        <- Logs generated by Airflow or other processes
-│   ├── dag_id=weather_data_pipeline
+├── logs                   <- Logs generated by Airflow or other processes
+│   ├── dag_id=daily_weather_data_pipeline
+│   ├── dag_id=daily_weather_model_development_pipeline_v2
+│   ├── dag_id=hourly_weather_data_pipeline
+│   ├── dag_id=hourly_weather_model_development_pipeline_v2
+│   ├── dag_id=weather_forecasting_pipeline
 │   ├── dag_processor_manager
 │   └── scheduler
 │
-├── models                      <- Serialized models and model-related files
+├── mlruns                 <- MLflow tracking server and artifacts
+│   ├── artifacts          <- Directory for MLflow artifacts
+│   └── mlflow.db          <- SQLite database for MLflow metadata
 │
-├── notebooks                   <- Jupyter notebooks for data exploration and prototyping
+├── models                 <- Serialized models and model-related files
 │
-├── plugins                     <- Custom Airflow plugins
+├── notebooks              <- Jupyter notebooks for data exploration and prototyping
 │
-├── reports                     <- Generated analysis and visualizations for reporting
-│   ├── figures                 <- Figures used in reports
+├── plugins                <- Custom Airflow plugins
+│
+├── references             <- Reference files or related documentation
+│
+├── reports                <- Generated analysis and visualizations for reporting
+│   ├── figures            <- Figures used in reports
 │   ├── data_collection_Group_8.pdf
 │   ├── Data_Pipeline_Group8.pdf
 │   ├── errors_failure_Group_8.pdf
 │   ├── Project_Scoping_Group_8.pdf
 │   └── user_needs_Group_8.pdf
-├── docker-compose.yaml         <- Docker configuration for containerized environments
-└── Dockerfile                  <- Docker image configuration
-├── requirements.txt            <- List of dependencies for the environment
-├── setup.cfg                   <- Configuration for code style enforcement (flake8, etc.)
+│
+├── scripts                <- Custom scripts for the project
+│
+├── streamlit              <- Streamlit web application for predictions
+│   ├── app.py             <- Main Streamlit app
+│   ├── app1.py            <- Additional Streamlit app version
+│   ├── app_test.py        <- Test script for Streamlit app
+│   ├── Dockerfile         <- Dockerfile for deploying Streamlit
+│   └── requirements.txt   <- Dependencies for Streamlit
+│
+├── tests                  <- Unit and integration tests
+│   ├── test_feature_engineering.py
+│   ├── test_utils.py
+│   ├── test_weather_data_collection.py
+│   ├── test_weather_data_processing.py
+│   └── test_weather_data_validation.py
+│
+├── weather_data           <- Weather data files
+│
+├── docker-compose.yaml    <- Docker configuration for containerized environments
+├── Dockerfile.airflow     <- Dockerfile for Airflow deployment
+├── Dockerfile.mlflow      <- Dockerfile for MLflow deployment
+├── requirements.txt       <- List of dependencies for the environment
+└── setup.cfg              <- Configuration for code style enforcement (flake8, etc.)
 ```
 
 ---
@@ -226,174 +266,273 @@ Follow these steps to install and set up the project:
     To stop the running Docker containers, press `Ctrl + C` in the terminal.
 ---
 
-# Data Pipeline for Weather Collection, Processing, and Analysis
-
-This section provides details on the ClimaSmart Data Pipeline, which uses **Apache Airflow** within **Docker** for orchestration. The pipeline automates weather data collection, processing, feature engineering, and quality validation to support ClimaSmart’s AI-powered weather prediction. The pipeline is designed to send email notifications upon successful completion of tasks or in the event of any errors, enhancing monitoring and alerting capabilities.
-
-## Platform Overview
-
-- **Platform**: Local environment using Docker containers
-- **Orchestration**: Apache Airflow in Docker
-- **Pipeline Objective**: Automated weather data collection, processing, quality validation, and notification alerts for data-driven insights.
-
-## Pipeline Architecture
-
-The pipeline consists of six core steps, each handled by a separate Directed Acyclic Graph (DAG) in Airflow. Each DAG automates specific tasks to streamline weather data processing from initial collection to final validation. Notifications are configured to send email alerts upon success or failure for each DAG.
+# **End-to-End Pipeline for Model Deployment 
+![alt text](image-5.png)
 
 ---
 
-### DAG Workflow and Status
+# **Weather Forecasting Workflow**
 
-| DAG                              | Purpose                                      | Status               |
-|----------------------------------|----------------------------------------------|----------------------|
-| Fetch and Save Daily Weather     | Retrieves daily data                         | Successfully Running |
-| Fetch and Save Hourly Weather    | Retrieves hourly data                        | Successfully Running |
-| Preprocess Daily Data            | Handles missing values and transformations   | Successfully Running |
-| Preprocess Hourly Data           | Handles missing values and transformations   | Successfully Running |
-| Feature Engineering              | Creates new features for analysis            | Successfully Running |
-| EDA and Visualization            | Generates visualizations for data insights   | Successfully Running |
-| Generate and Save Schema Stats   | Generates schema metadata                    | Successfully Running |
-| Validate Weather Data            | Ensures schema and data quality              | Successfully Running |
-| Test Data Quality and Schema     | Validates data quality against standards     | Successfully Running |
-| Send Email Notification          | Sends email notifications upon task completion or error | Successfully Running |
+This repository contains an end-to-end automated pipeline for weather forecasting using daily and hourly weather data. The workflow incorporates data collection, preprocessing, feature engineering, validation, model training, and analysis to provide robust predictions while ensuring data quality. The pipeline is orchestrated using **Apache Airflow** and relies on **Google Cloud Storage** for storing processed data, models, and analysis reports.
 
 ---
 
-### Detailed Workflow of Each Step
+## **1. Data Collection**
+### Overview
+Our pipeline begins by fetching weather data from the Open-Meteo API. Both daily and hourly datasets are collected and stored in structured formats. 
 
-#### 1. Fetch and Save Daily Weather Data
-- **Objective**: Retrieve daily weather data from external APIs and store it in Google Cloud Storage (GCS).
-- **Process**:
-  - **Data Collection**: Uses APIs like Open-Meteo’s Historical Weather API with the `requests` library.
-  - **Data Processing**: Structures data with **pandas**, applying time zone standardization and formatting.
-  - **Storage**: Saves as CSV in GCS.
-- **DAG Status**: Successfully running, scheduled to run daily.
-- **Notifications**: Sends email alerts upon successful completion or failure.
+We use **Airflow DAGs** to automate data collection, ensuring efficient scheduling and monitoring.
 
-#### 2. Fetch and Save Hourly Weather Data
-- **Objective**: Capture hourly weather data for granular analysis.
-- **Process**:
-  - **Data Collection**: Fetches hourly data via API calls with `requests`.
-  - **Data Processing**: Formats data with **pandas**, aggregating and aligning time zones.
-  - **Storage**: Saves in CSV format in GCS.
-- **DAG Status**: Successfully running, scheduled to run hourly.
-- **Notifications**: Sends email alerts upon successful completion or failure.
+### Key Modules
+- **`weather_data_collection.py`**:
+  - `setup_session`: Configures a session with caching and retries for API robustness.
+  - `fetch_daily_weather_data`: Fetches daily weather data.
+  - `fetch_hourly_weather_data`: Fetches hourly weather data.
+  - `process_daily_weather_data` and `process_hourly_weather_data`: Convert raw API responses into structured pandas DataFrames.
 
-#### 3. Preprocess Daily Data
-- **Objective**: Perform data preprocessing for daily weather data to ensure quality.
-- **Process**:
-  - **Handling Missing Values**: Uses **pandas** and **numpy** to fill or drop null values.
-  - **Data Transformation**: Standardizes temperature units and date formats.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 4. Preprocess Hourly Data
-- **Objective**: Perform data preprocessing for hourly weather data to ensure quality.
-- **Process**:
-  - **Handling Missing Values**: Uses **pandas** and **numpy** to fill or drop null values.
-  - **Data Transformation**: Standardizes temperature units and date formats.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 5. Feature Engineering
-- **Objective**: Enrich the data with new features for enhanced analysis.
-- **Process**:
-  - **Feature Generation**: Generates rolling averages, temperature differentials, etc., using **pandas**.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 6. EDA and Visualization
-- **Objective**: Create visualizations to gain insights into the data.
-- **Process**:
-  - **Visualization**: Generates time series plots, heatmaps, and histograms using **matplotlib** and **seaborn**.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 7. Generate and Save Schema Statistics
-- **Objective**: Generate summary statistics and schema metadata for data validation.
-- **Process**:
-  - **Schema Statistics**: Calculates min, max, and mean for each feature.
-  - **Storage**: Saves schema statistics in GCS for reference.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 8. Validate Weather Data
-- **Objective**: Ensure that weather data meets schema requirements.
-- **Process**:
-  - **Schema Validation**: Ensures data conforms to expected column names and types.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 9. Test Data Quality and Schema
-- **Objective**: Conduct additional data quality checks.
-- **Process**:
-  - **Quality Testing**: Tests for duplicates, null values, and schema compliance using **pandas**.
-- **DAG Status**: Successfully running.
-- **Notifications**: Sends email alerts upon successful completion or failure.
-
-#### 10. Send Email Notification
-- **Objective**: Notify users of task completion status (success or error).
-- **Process**:
-  - **Email Alerts**: Sends email notifications to designated recipients based on task completion status.
-- **DAG Status**: Successfully running.
+### Features Extracted
+- **Daily Data**: Includes variables such as maximum and minimum temperatures, precipitation sums, sunshine duration, wind speeds, and evapotranspiration.
+- **Hourly Data**: Includes temperature, humidity, precipitation, wind characteristics, and solar radiation metrics.
 
 ---
 
-### Technology Stack and Dependencies
+## **2. Data Cleaning and Preprocessing**
+### Overview
+High-quality data is crucial for accurate predictions. The preprocessing pipeline ensures the data is clean, consistent, and ready for feature engineering and modeling.
 
-- **Orchestration**: Apache Airflow within Docker
-- **Storage**: Google Cloud Storage (GCS) for data files and schema metadata.
-- **Python Libraries**:
-  - **pandas** and **numpy** for data handling.
-  - **requests** for API interactions.
-  - **matplotlib** and **seaborn** for visualization.
-  - **scikit-learn** for outlier detection and normalization.
-
-### Orchestration and Scheduling with Apache Airflow
-Airflow DAGs manage each stage, enabling robust monitoring and modularity. Each task is triggered on a schedule:
-- **Daily Pipeline**: Runs each morning for daily data.
-- **Hourly Pipeline**: Runs hourly to capture real-time data.
-
-### Email Notifications
-Each DAG in the pipeline has email notifications configured to provide alerts on the completion status of tasks:
-- **Success Alerts**: Sent upon successful completion of tasks.
-- **Error Alerts**: Sent in case of any errors or failures in task execution.
+### Key Modules
+- **`weather_data_preprocessing.py`**:
+  - Handles missing values (e.g., interpolation for continuous variables, zero-filling for precipitation).
+  - Removes outliers using the IQR method to prevent distorted model outputs.
+  - Normalizes numerical columns for compatibility with machine learning models.
+  - Adds time-based features like `season` and `is_weekend`.
 
 ---
 
-## DVC Integration for Data Tracking and Version Control
+## **3. Feature Engineering**
+### Overview
+Feature engineering enhances the predictive power of our models by transforming raw data into meaningful features.
 
-Integrating **Data Version Control (DVC)** with ClimaSmart’s pipeline helps manage and track data versions. Key tracked files include raw data, processed data, feature-engineered datasets, and visualizations.
-
-### DVC Setup
-1. **Initialize DVC**:
-   ```bash
-   dvc init
-   ```
-
-2. **Add Remote Storage**:
-   ```bash
-   dvc remote add -d myremote gs://your-gcs-bucket/dvc-storage
-   ```
-
-3. **Track Data Files**:
-   ```bash
-   dvc add data/raw/daily_weather.csv
-   dvc add data/raw/hourly_weather.csv
-   dvc add data/processed/preprocessed_daily.csv
-   dvc add data/processed/preprocessed_hourly.csv
-   dvc add data/featured/engineered_data.csv
-   ```
-
-### DVC Benefits
-Using DVC enhances reproducibility and traceability of data changes across the pipeline stages, with remote storage providing scalable data access.
+### Key Modules
+- **`feature_engineering.py`**:
+  - **Daily Features**:
+    - **Temperature Range**: Difference between max and min temperatures.
+    - **Diurnal Temperature Range**: Captures daily temperature fluctuations.
+    - **Sunshine Ratio**: Proportion of sunshine duration to total daylight duration.
+    - **Precipitation Intensity**: Average precipitation per hour.
+    - Binary flags for hot, cold, and rainy days.
+  - **Hourly Features**:
+    - **Rolling Averages**: Calculates rolling means for temperature and precipitation over 24 hours.
+    - **Extreme Weather Flags**: Binary indicators for freezing, rain, and snow.
+    - **Wind Chill and Heat Index**: Quantifies human-perceived temperature based on weather conditions.
+    - Time-based features such as `hour` and `is_holiday`.
 
 ---
-### Model Development
 
-## Conclusion
+## **4. Data Validation**
+### Overview
+To ensure data reliability, custom validation checks are applied to the datasets. Validation ensures the data adheres to predefined quality standards and schemas.
 
-The ClimaSmart Data Pipeline offers a robust solution for automated weather data processing. Each Airflow DAG is independently managed, ensuring modularity, scalability, and reliability for data-driven applications. The addition of Docker-based orchestration and email notifications enhances flexibility and monitoring for local deployment.
+### Key Modules
+- **`weather_data_validation.py`**:
+  - **Validation Checks**:
+    - `test_no_nulls`: Ensures no missing values.
+    - `test_positive_temperatures`: Validates temperature ranges.
+    - `test_precipitation_non_negative`: Ensures precipitation values are non-negative.
+  - **Schema Validation**: Compares schemas between daily and hourly datasets to ensure consistency.
 
-For any further setup instructions or pipeline expansion, refer to [Detailed Pipeline Documentation](reports/Data_Pipeline_Group8.pdf)
+---
+
+## **5. Model Training**
+### Overview
+The pipeline uses **XGBoost** for training regression models on both daily and hourly datasets. The trained models are stored in `.json` format for easy deployment.
+
+### Key Modules
+- **Daily Model Training (`daily_model_training.py`)**:
+  - Trains models using features such as `month`, `day_of_year`, and `week_of_year`.
+  - Targets: `apparent_temperature_max`, `precipitation_sum`, etc.
+  - Evaluates model performance using RMSE.
+- **Hourly Model Training (`hourly_model_training.py`)**:
+  - Trains models using hourly features such as `hour`, `month`, and `day_of_year`.
+  - Targets: `apparent_temperature`, `precipitation`, etc.
+  - Monitors model performance and triggers retraining if thresholds are exceeded.
+
+---
+
+## **6. Model Analysis**
+### Overview
+Comprehensive analysis ensures the models are unbiased and sensitive to feature variations.
+
+### Key Modules
+- **`daily_model_analysis.py` & `hourly_model_analysis.py`**:
+  - **Bias Analysis**:
+    - Compares predicted vs. actual values.
+    - Computes MAE, RMSE, R², and average bias.
+    - Saves scatter plots for bias visualization.
+    ### Daily Bias Amalysis for Apparent Temperature Max and Precipitation Sum
+    ![alt text](image-2.png)
+    ![alt text](image-6.png)
+    ### Hourly Bias Analysis for Apparent Temperature Max and Precipitation Sum
+    ![alt text](image-3.png)
+    ![alt text](image-4.png)
+
+  - **Sensitivity Analysis**:
+    - Perturbs key features (e.g., `month`, `hour`) to observe changes in predictions.
+    - Outputs sensitivity metrics and visualizations as `.csv` and plots.
+    ![alt text](image-7.png)
+    ![alt text](image-8.png)
+    ![alt text](image-9.png)
+    ![alt text](image-10.png)
+
+---
+
+## **7. Model Monitoring and Retraining**
+### Overview
+Models are monitored for performance degradation. If metrics fall below predefined thresholds, retraining is triggered automatically.
+
+### Key Modules
+- **`daily_model_training.py` & `hourly_model_training.py`**:
+  - Monitors RMSE and R² for all targets.
+  - Retrains models when performance thresholds are exceeded.
+
+## **8. Pipeline Orchestration**
+### Overview
+The entire workflow is automated using **Apache Airflow**, ensuring each step is executed in sequence and monitored.
+
+### Key Pipelines
+- **Weather Forecasting Pipeline (`weather_forecasting_dag.py`)**:
+  - Orchestrates daily and hourly data pipelines.
+  - Sends email notifications upon pipeline completion.
+- **Hourly Data Pipeline (`hourly_weather_data_collection_dag.py`)**:
+  - Automates data collection, preprocessing, feature engineering, and validation.
+  - Triggers the hourly model development pipeline.
+- **Daily Data Pipeline (`daily_weather_data_collection_dag.py`)**:
+  - Automates data collection, preprocessing, feature engineering, and validation.
+  - Triggers the daily model development pipeline.
+- **Model Development Pipelines**:
+  - **Daily (`daily_model_development_dag.py`)**:
+    - Handles model training, bias analysis, sensitivity analysis, and monitoring.
+  - **Hourly (`hourly_model_development_dag.py`)**:
+    - Similar to daily pipeline but operates on hourly data.
+
+---
+
+## **9. Outputs**
+1. **Trained Models**: `.json` files for daily and hourly targets.
+2. **Analysis Reports**:
+   - Bias analysis plots.
+   - Sensitivity analysis results as `.csv`.
+3. **Preprocessed Data**: Cleaned and engineered datasets for modeling.
+
+---
+
+## **10. Email Alerts**
+The pipeline is configured to send email notifications for:
+- Successful task or DAG completions.
+- Detected anomalies or validation failures.
+
+### Setup
+Configure SMTP settings in `docker-compose.yaml` to enable email alerts.
+
+![alt text](image-1.png)
+
+---
+## **11. Testing and Verification**
+- DAG completions are verified via email notifications.
+- Analysis outputs are stored in Google Cloud Storage for review.
+---
+
+# Model and App Deployment Details
+
+## Airflow deployment on GCP
+
+### Workflow Overview
+
+1. CI/CD Pipeline: The deployment of Apache Airflow is automated using GitHub Actions. The pipeline:
+2. Creates a new instance in GCP with the required configuration.
+3. Deploys updated code and configurations.
+4. Verifies deployment success.
+5. Removes the old instance post-deployment to save resources.
+
+
+### Configure GitHub Actions:
+
+Add a .yml file under .github/workflows/ for deployment.
+
+### Test Deployment:
+
+1. Push changes to a feature branch.
+Check GitHub Actions logs for successful deployment.
+
+![Airflow deployment](assets/screenshots/airflow-deployment-2.png)
+
+## Streamlit App Deployment
+
+### Workflow Overview
+
+1. CI/CD Pipeline: Streamlit is deployed on an instance group for load balancing.
+Uses a Streamlit-specific VM template for consistent app environments.  
+
+2. Automatically creates VMs based on the traffic load.
+
+## Steps to Replicate:
+
+Add deployment workflow in .github/workflows/deploy_streamlit_app.yaml:
+yaml
+
+![streamlit app deployment](assets/screenshots/streamlit-app-deployment.png)
+
+## Screenshots
+
+### 1. Airflow Deployment
+![Airflow Deployment](assets/screenshots/airflow-deployment-1.png)
+
+### 2. Streamlit App
+![Streamlit App 1](assets/screenshots//streamlit-app-1.png)
+
+
+![Streamlit App 2](assets/screenshots//streamlit-app-2.png)
+
+
+![Streamlit App 3](assets/screenshots//streamlit-app-3.png)
+
+
+![Streamlit App 4](assets/screenshots//streamlit-app-4.png)
+
+### 3. Cloud Monitoring Dashboard
+![Cloud Monitoring](assets/screenshots/gcp-vm-monitoring.png)
+
+### 4. GCP VM Dashboard
+![GCP VM Dashboard](assets/screenshots/gcp-vm-dashboard.png)
+
+![GCP VM observability](assets/screenshots/gcp-vm-observability.png)
+
+## Steps to Use Workflows
+
+### For Airflow Deployment:
+
+1. Push your code changes to the main or deploy branch.
+2. GitHub Actions will trigger the CI/CD workflow.
+3. Verify the new instance is created and operational in GCP.
+
+### For Streamlit Deployment:
+
+1. Push Streamlit code to the GitHub repository.
+2. The workflow triggers VM creation in the instance group.
+3. Verify the load balancer reflects the updated app version.
+4. This documentation ensures clarity for setup and troubleshooting.
+
+Here’s the cost analysis written in markdown:
+
+# **Cost Analysis**
+
+| **Resource**                  | **Cost (USD)**    |
+|--------------------------------|-------------------|
+| GCP VM Instances (3 instances) | $287.64/year      |
+| Storage (100GB/month for 3 months) | $6              |
+| API Compute Instance (Streamlit)   | $50               |
+| Streamlit Compute Instance     | $50               |
+| **Total Cost**                 | **$393.64/year**  |
+
+
 ---

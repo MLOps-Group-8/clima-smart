@@ -196,5 +196,15 @@ monitor_hourly_models_task = PythonOperator(
     dag=dag,
 )
 
+# Email notification task
+email_notification_task = EmailOperator(
+    task_id='send_email_notification',
+    to='keshiarun01@gmail.com',
+    subject='Hourly model development dag Completed Successfully',
+    html_content='<p>Dag Completed</p>',
+    dag=dag,
+)
+
+
 # Define task dependencies
-download_hourly_data_task >> train_hourly_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> upload_hourly_models_task >> monitor_hourly_models_task
+download_hourly_data_task >> train_hourly_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> upload_hourly_models_task >> monitor_hourly_models_task >> email_notification_task

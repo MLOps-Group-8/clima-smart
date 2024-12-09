@@ -270,5 +270,15 @@ monitor_model_performance_task = PythonOperator(
     dag=dag,
 )
 
+# Email notification task
+email_notification_task = EmailOperator(
+    task_id='send_email_notification',
+    to='keshiarun01@gmail.com',
+    subject='Daily model development dag Completed Successfully',
+    html_content='<p>Dag Completed</p>',
+    dag=dag,
+)
+
+
 # Define task dependencies
-update_train_file_task >> train_models_task >> upload_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> predict_for_today_task >> monitor_model_performance_task >> notify_success
+update_train_file_task >> train_models_task >> upload_models_task >> [bias_analysis_task, sensitivity_analysis_task] >> predict_for_today_task >> monitor_model_performance_task >> email_notification_task
