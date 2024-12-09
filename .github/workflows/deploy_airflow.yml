@@ -103,7 +103,7 @@ jobs:
                 airflow_logs:
                   type: files
                   include_paths:
-                    - /path/to/your/airflow/logs/*.log
+                    - /home/runner/clima-smart/logs/*.log
               service:
                 pipelines:
                   default_pipeline:

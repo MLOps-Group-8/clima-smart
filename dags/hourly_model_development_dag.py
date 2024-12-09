@@ -48,21 +48,28 @@ METRIC_THRESHOLDS = {'rmse': 5.0, 'r2': 0.8}
 
 # Define function to notify failure or sucess via an email
 def notify_success(context):
+    dag_run = context['dag_run']
+    msg = f"DAG {dag_run.dag_id} has completed successfully."
+    subject = f"Success: {dag_run.dag_id}"
     success_email = EmailOperator(
         task_id='success_email',
         to='keshiarun01@gmail.com',
-        subject='Success Notification from Airflow',
-        html_content='<p>The task succeeded.</p>',
+        subject=subject,
+        html_content=msg,
         dag=context['dag']
     )
     success_email.execute(context=context)
 
 def notify_failure(context):
+    dag_run = context['dag_run']
+    task = context['task']
+    msg = f"Task {task.task_id} in DAG {dag_run.dag_id} failed."
+    subject = f"Failure: {dag_run.dag_id} - {task.task_id}"
     failure_email = EmailOperator(
         task_id='failure_email',
         to='keshiarun01@gmail.com',
-        subject='Failure Notification from Airflow',
-        html_content='<p>The task failed.</p>',
+        subject=subject,
+        html_content=msg,
         dag=context['dag']
     )
     failure_email.execute(context=context)
@@ -193,6 +200,7 @@ monitor_hourly_models_task = PythonOperator(
     task_id='monitor_hourly_models',
     python_callable=monitor_hourly_models,
     on_failure_callback=notify_failure,
+    provide_context=True,
     dag=dag,
 )
 
