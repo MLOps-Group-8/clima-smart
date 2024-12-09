@@ -9,6 +9,10 @@ from openai import OpenAI
 from google.cloud import storage
 import openai
 
+# Fetch and set the API key
+api_key = get_openai_api_key_from_gcs("clima-smart-secrets", "openai_key.txt")
+
+
 # Configure GCS
 BUCKET_NAME = "clima-smart-data-collection"
 DAILY_DATA_PATH = 'weather_data/daily_weather_data.csv'
@@ -24,8 +28,6 @@ def get_openai_api_key_from_gcs(bucket_name, file_path):
     blob = bucket.blob(file_path)
     return blob.download_as_text()
 
-# Fetch and set the API key
-openai.api_key = get_openai_api_key_from_gcs("clima-smart-secrets", "openai_key.txt")
 
 # Target features with min and max values
 TARGET_FEATURES_DAILY = {
@@ -37,7 +39,7 @@ TARGET_FEATURES_HOURLY = {
     'rain': {'min': 0, 'max': 20},
 }
 
-client = OpenAI()
+client = OpenAI(api_key=api_key)
 
 def get_clothing_recommendations(weather_data):
     """
@@ -224,11 +226,11 @@ def main():
         ax.grid(True)
         st.pyplot(fig)
 
-    # Clothing Recommendations Section
-    st.write("### Personalized Clothing Recommendations")
-    with st.spinner("Generating clothing recommendations..."):
-        recommendations = get_clothing_recommendations(daily_predictions)
-    st.write(recommendations)
+    # # Clothing Recommendations Section
+    # st.write("### Personalized Clothing Recommendations")
+    # with st.spinner("Generating clothing recommendations..."):
+    #     recommendations = get_clothing_recommendations(daily_predictions)
+    # st.write(recommendations)
 
 if __name__ == "__main__":
     main()
